@@ -1,0 +1,40 @@
+<%- include('partials/header', { title: 'Orçamentos' }) %>
+
+<h1 class="page">Orçamentos</h1>
+<p class="sub">Solicitações recebidas pelo site. Abra um pedido para ver detalhes, mudar o status ou gerar o PDF.</p>
+
+<div class="row-actions" style="margin-bottom:18px">
+  <% const filtros = [['','Todos'],['novo','Novos'],['em_analise','Em análise'],['enviado','Enviados'],['fechado','Fechados'],['perdido','Perdidos']]; %>
+  <% filtros.forEach(([val,lbl]) => { %>
+    <a class="btn sm <%= status===val ? '' : 'ghost' %>" href="/admin/orcamentos<%= val ? '?status='+val : '' %>"><%= lbl %></a>
+  <% }) %>
+</div>
+
+<div class="panel">
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>#</th><th>Empresa / Contato</th><th>Serviço</th><th>Contato</th><th>Status</th><th>Recebido</th><th></th></tr></thead>
+    <tbody>
+      <% if (quotes.length === 0) { %>
+        <tr><td colspan="7" class="empty">Nenhum orçamento neste filtro. Ajuste os filtros acima ou aguarde novas solicitações.</td></tr>
+      <% } %>
+      <% quotes.forEach(q => { %>
+        <tr>
+          <td class="num"><%= String(q.id).padStart(4,'0') %></td>
+          <td><strong><%= q.empresa || '—' %></strong><br><span style="color:var(--ink-3);font-size:13px"><%= q.nome %></span></td>
+          <td><%= q.servico %></td>
+          <td style="font-size:13px;color:var(--ink-2)"><%= q.email %><% if (q.telefone) { %><br><%= q.telefone %><% } %></td>
+          <td><span class="badge <%= q.status %>"><%= q.status.replace('_',' ') %></span></td>
+          <td style="color:var(--ink-3);font-size:13px"><%= q.created_at %></td>
+          <td class="row-actions">
+            <a class="linkish" href="/admin/orcamentos/<%= q.id %>">abrir</a>
+            <a class="linkish" href="/admin/orcamentos/<%= q.id %>/pdf" target="_blank">PDF</a>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

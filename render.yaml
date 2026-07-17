@@ -1,0 +1,20 @@
+# render.yaml — configuração opcional do Render (Blueprint).
+# Você pode usar isto OU configurar tudo pela interface do Render.
+services:
+  - type: web
+    name: vigilante-free
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false      # cole a string do Supabase no painel do Render
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ADMIN_USER
+        sync: false
+      - key: ADMIN_PASS
+        sync: false

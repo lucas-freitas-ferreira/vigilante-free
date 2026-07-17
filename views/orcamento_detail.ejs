@@ -1,0 +1,230 @@
+<%- include('partials/header', { title: 'Orçamento #' + orcamento.id }) %>
+<%
+function money(v){ return (v || v===0) ? Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}) : '—'; }
+function fmtCnpj(v){ const d=String(v||'').replace(/\D/g,''); if(d.length===14) return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5'); if(d.length===11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4'); return v||'—'; }
+const st = (orcamento.status || 'novo');
+const stLabel = st.replace('_',' ');
+%>
+
+<a class="back" href="/admin/orcamentos">← voltar para orçamentos</a>
+
+<div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin:8px 0 4px;flex-wrap:wrap">
+  <h1 class="page" style="margin:0">Orçamento #<%= String(orcamento.id).padStart(4,'0') %></h1>
+  <span class="badge <%= st %>"><%= stLabel %></span>
+</div>
+<p class="sub">
+  <strong style="color:var(--ink)"><%= orcamento.empresa || orcamento.nome %></strong>
+  · recebido em <%= orcamento.created_at %>
+  <% if (orcamento.valor_total && Number(orcamento.valor_total) > 0) { %>
+    · total <strong style="color:var(--signal)"><%= money(orcamento.valor_total) %></strong>
+  <% } %>
+</p>
+
+<!-- Ações rápidas -->
+<div class="row-actions" style="margin-bottom:22px">
+  <form method="post" action="/admin/orcamentos/<%= orcamento.id %>/status" class="row-actions" style="gap:8px">
+    <select name="status" aria-label="Status" style="width:auto">
+      <% ['novo','em_analise','enviado','fechado','perdido'].forEach(s => { %>
+        <option value="<%= s %>" <%= st===s?'selected':'' %>><%= s.replace('_',' ') %></option>
+      <% }) %>
+    </select>
+    <button class="btn ghost sm" type="submit">Atualizar status</button>
+  </form>
+  <a class="btn sm" href="/admin/orcamentos/<%= orcamento.id %>/pdf" target="_blank" rel="noopener">Gerar PDF</a>
+  <form method="post" action="/admin/orcamentos/<%= orcamento.id %>/contrato"
+        onsubmit="return confirm('Transformar este orçamento em contrato?')">
+    <button class="btn ghost sm" type="submit">Gerar contrato</button>
+  </form>
+</div>
+
+<!-- Dados do cliente -->
+<div class="panel">
+  <h2>Dados da solicitação</h2>
+  <dl class="dl">
+    <dt>Empresa</dt><dd><%= orcamento.empresa || '—' %></dd>
+    <dt>CNPJ / CPF</dt><dd><%= orcamento.cnpj ? fmtCnpj(orcamento.cnpj) : '—' %></dd>
+    <dt>Contato</dt><dd><%= orcamento.nome %></dd>
+    <dt>E-mail</dt><dd><a class="linkish" href="mailto:<%= orcamento.email %>"><%= orcamento.email %></a></dd>
+    <dt>Telefone</dt><dd><%= orcamento.telefone || '—' %></dd>
+    <dt>Serviço</dt><dd><%= orcamento.servico %></dd>
+    <dt>Prazo desejado</dt><dd><%= orcamento.prazo || '—' %></dd>
+  </dl>
+  <% if (orcamento.detalhes) { %>
+    <div style="padding:16px 20px 20px">
+      <label style="margin-bottom:8px">Detalhes informados</label>
+      <div class="detail-box"><%= orcamento.detalhes %></div>
+    </div>
+  <% } %>
+</div>
+
+<!-- Montar orçamento -->
+<fieldset>
+  <legend>Montar orçamento</legend>
+  <form method="post" action="/admin/orcamentos/<%= orcamento.id %>/salvar" class="stack" id="orcForm">
+    <div class="grid3">
+      <div class="field">
+        <label>Responsável pelo orçamento</label>
+        <input name="responsavel" value="<%= orcamento.responsavel || '' %>" placeholder="quem preparou">
+      </div>
+      <div class="field">
+        <label>Data de início</label>
+        <input name="data_inicio" type="date" value="<%= orcamento.data_inicio || '' %>">
+      </div>
+      <div class="field">
+        <label>Data de fim</label>
+        <input name="data_fim" type="date" value="<%= orcamento.data_fim || '' %>">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Itens</label>
+      <% if ((tabelaPrecos||[]).length) { %>
+        <div class="catalog-chips">
+          <span class="chip-label">Adicionar da tabela:</span>
+          <% tabelaPrecos.forEach(p => { %>
+            <button type="button" class="chip js-add-preco"
+                    data-nome="<%= p.nome %>" data-valor="<%= Number(p.valor_unitario) %>">
+              <%= p.nome %> · <b>R$ <%= Number(p.valor_unitario).toLocaleString('pt-BR',{minimumFractionDigits:2}) %></b>
+            </button>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <div class="panel" style="margin:0;border-radius:var(--r-md)">
+        <table id="itensTbl">
+          <thead>
+            <tr>
+              <th style="width:48%">Item</th>
+              <th style="width:14%">Qtd.</th>
+              <th style="width:20%">Valor unit. (R$)</th>
+              <th style="width:14%">Subtotal</th>
+              <th style="width:4%" aria-label="Remover"></th>
+            </tr>
+          </thead>
+          <tbody id="itensBody"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" style="text-align:right;color:var(--ink-3);text-transform:uppercase;font-size:11px;letter-spacing:.05em">Total</td>
+              <td class="num" id="totalCell" style="font-weight:700;color:var(--signal)">—</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+        <div style="padding:12px 20px;border-top:1px solid var(--line)">
+          <button type="button" class="btn ghost sm" id="addItem">+ Item avulso</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- lista de sugestões para o autocomplete do campo de item -->
+    <datalist id="catalogoPrecos">
+      <% (tabelaPrecos||[]).forEach(p => { %>
+        <option value="<%= p.nome %>">R$ <%= Number(p.valor_unitario).toLocaleString('pt-BR',{minimumFractionDigits:2}) %></option>
+      <% }) %>
+    </datalist>
+
+    <input type="hidden" name="itens_json" id="itensJson">
+    <input type="hidden" name="valor_total" id="valorTotal">
+    <div class="row-actions">
+      <button class="btn" type="submit">Salvar orçamento</button>
+    </div>
+  </form>
+  <p style="color:var(--ink-3);font-size:12.5px;margin:14px 0 0">
+    Clique num serviço da tabela para adicionar, ou use “+ Item avulso” e digite. Ao digitar um nome que existe na
+    tabela, o valor é preenchido sozinho. O total é somado automaticamente.
+  </p>
+</fieldset>
+
+<!-- Excluir -->
+<fieldset style="margin-top:20px">
+  <legend>Excluir</legend>
+  <form method="post" action="/admin/orcamentos/<%= orcamento.id %>/excluir"
+        onsubmit="return confirm('Excluir este orçamento definitivamente?')">
+    <button class="btn danger" type="submit">Excluir orçamento</button>
+  </form>
+</fieldset>
+
+<script>
+(function(){
+  var PRECOS = <%- JSON.stringify((tabelaPrecos||[]).map(function(p){return {nome:p.nome, valor:Number(p.valor_unitario)};})) %>;
+  var ITENS  = <%- JSON.stringify((itens||[]).map(function(i){return {nome:i.nome, quantidade:Number(i.quantidade), valor:Number(i.valor_unitario)};})) %>;
+
+  var byName = {};
+  PRECOS.forEach(function(p){ byName[p.nome.trim().toLowerCase()] = p.valor; });
+
+  var body = document.getElementById('itensBody');
+  var totalCell = document.getElementById('totalCell');
+  var fmt = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+  function esc(s){ return String(s||'').replace(/"/g,'&quot;'); }
+
+  function renderEmpty(){
+    if(!body.querySelector('tr.data-row')){
+      body.innerHTML = '<tr class="empty-row"><td colspan="5" class="builder-empty">Nenhum item ainda. Adicione um serviço da tabela acima ou clique em “+ Item avulso”.</td></tr>';
+    }
+  }
+  function clearEmpty(){ var e=body.querySelector('.empty-row'); if(e) e.remove(); }
+
+  function addRow(item){
+    clearEmpty();
+    item = item || {nome:'', quantidade:1, valor:0};
+    var tr = document.createElement('tr');
+    tr.className = 'data-row';
+    tr.innerHTML =
+      '<td><input class="js-nome" list="catalogoPrecos" autocomplete="off" placeholder="Serviço ou item avulso" value="'+esc(item.nome)+'"></td>'+
+      '<td><input class="js-qtd num" type="number" min="1" step="1" value="'+(item.quantidade||1)+'"></td>'+
+      '<td><input class="js-val num" inputmode="decimal" value="'+(item.valor||0)+'"></td>'+
+      '<td class="num js-sub">—</td>'+
+      '<td><button type="button" class="icon-btn js-del" aria-label="Remover item">×</button></td>';
+    body.appendChild(tr);
+
+    var nome = tr.querySelector('.js-nome');
+    var val  = tr.querySelector('.js-val');
+    // se o valor já veio diferente do catálogo, considera-se editado manualmente
+    var known = byName[(item.nome||'').trim().toLowerCase()];
+    var edited = !!(item.valor && known !== undefined && known !== item.valor);
+
+    val.addEventListener('input', function(){ edited = true; recalc(); });
+    nome.addEventListener('input', function(){
+      var hit = byName[nome.value.trim().toLowerCase()];
+      if(hit !== undefined && !edited){ val.value = hit; }
+      recalc();
+    });
+    tr.querySelector('.js-qtd').addEventListener('input', recalc);
+    tr.querySelector('.js-del').addEventListener('click', function(){ tr.remove(); renderEmpty(); recalc(); });
+    return tr;
+  }
+
+  function recalc(){
+    var total = 0, itens = [];
+    body.querySelectorAll('tr.data-row').forEach(function(tr){
+      var nome = tr.querySelector('.js-nome').value.trim();
+      var qtd = parseFloat(tr.querySelector('.js-qtd').value) || 0;
+      var val = parseFloat(String(tr.querySelector('.js-val').value).replace(',','.')) || 0;
+      var sub = qtd * val;
+      tr.querySelector('.js-sub').textContent = sub ? fmt.format(sub) : '—';
+      if(nome){ itens.push({nome:nome, quantidade:qtd, valor_unitario:val}); total += sub; }
+    });
+    totalCell.textContent = total ? fmt.format(total) : '—';
+    document.getElementById('itensJson').value = JSON.stringify(itens);
+    document.getElementById('valorTotal').value = total.toFixed(2);
+  }
+
+  // chips da tabela de preços -> adiciona linha já preenchida
+  document.querySelectorAll('.js-add-preco').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var tr = addRow({ nome: btn.dataset.nome, quantidade:1, valor: parseFloat(btn.dataset.valor) });
+      tr.querySelector('.js-qtd').focus();
+      recalc();
+    });
+  });
+  document.getElementById('addItem').addEventListener('click', function(){
+    var tr = addRow(); tr.querySelector('.js-nome').focus(); recalc();
+  });
+  document.getElementById('orcForm').addEventListener('submit', recalc);
+
+  if(ITENS.length){ ITENS.forEach(addRow); } else { renderEmpty(); }
+  recalc();
+})();
+</script>
+
+<%- include('partials/footer') %>

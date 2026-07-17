@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= typeof title !== 'undefined' ? title : 'Painel' %> — Vigilante Free</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+  <div class="top">
+    <div class="brand"><span class="dot" aria-hidden="true"></span>VIGILANTE <span>FREE</span> · GESTÃO</div>
+    <div class="who">
+      <span><%= user ? user.nome || user.username : '' %></span>
+      <form method="post" action="/admin/logout" style="margin:0"><button class="logout">Sair</button></form>
+    </div>
+  </div>
+  <div class="layout">
+    <nav class="side">
+      <a href="/admin" class="<%= path === '/admin' ? 'active' : '' %>">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        Início
+      </a>
+      <a href="/admin/orcamentos" class="<%= path.startsWith('/admin/orcamentos') ? 'active' : '' %>">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>
+        Orçamentos
+      </a>
+      <a href="/admin/protocolos" class="<%= path.startsWith('/admin/protocolos') ? 'active' : '' %>">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Protocolos
+      </a>
+      <a href="/admin/estoque" class="<%= path.startsWith('/admin/estoque') ? 'active' : '' %>">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8V21H3V8"/><rect x="1" y="3" width="22" height="5"/><path d="M10 12h4"/></svg>
+        Estoque &amp; Locação
+      </a>
+    </nav>
+    <main class="main">
+      <% if (flash) { %><div class="flash <%= flash.type %>"><%= flash.msg %></div><% } %>

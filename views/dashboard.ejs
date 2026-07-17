@@ -1,0 +1,58 @@
+<%- include('partials/header', { title: 'Início' }) %>
+
+<h1 class="page">Visão geral</h1>
+<p class="sub">Resumo dos orçamentos e do estoque de aparelhos.</p>
+
+<div class="stats">
+  <div class="card"><div class="k">Orçamentos novos</div><div class="v sig"><%= novos %></div></div>
+  <div class="card"><div class="k">Total de orçamentos</div><div class="v"><%= totalOrcamentos %></div></div>
+  <div class="card"><div class="k">Aparelhos em estoque</div><div class="v ok"><%= totais.totalEstoque %></div></div>
+  <div class="card"><div class="k">Aparelhos locados</div><div class="v info"><%= totais.totalLocados %></div></div>
+</div>
+
+<% if (contratos.vencidos > 0 || contratos.vencendo > 0) { %>
+  <div class="flash erro" style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+    <span>
+      <% if (contratos.vencidos > 0) { %><strong><%= contratos.vencidos %></strong> contrato(s) vencido(s)<% } %>
+      <% if (contratos.vencidos > 0 && contratos.vencendo > 0) { %> · <% } %>
+      <% if (contratos.vencendo > 0) { %><strong><%= contratos.vencendo %></strong> vencendo nos próximos 5 dias<% } %>
+      — atenção à cobrança/renovação.
+    </span>
+    <a class="btn sm" href="/admin/protocolos?situacao=vencendo">Ver protocolos</a>
+  </div>
+<% } %>
+
+<div class="stats" style="grid-template-columns:repeat(3,1fr)">
+  <a class="card" href="/admin/protocolos?situacao=ativos"><div class="k">Contratos ativos</div><div class="v ok"><%= contratos.ativos %></div></a>
+  <a class="card" href="/admin/protocolos?situacao=vencendo"><div class="k">Vencendo (5 dias) ↗</div><div class="v" style="color:var(--warn)"><%= contratos.vencendo %></div></a>
+  <a class="card" href="/admin/protocolos?situacao=vencidos"><div class="k">Vencidos ↗</div><div class="v" style="color:var(--danger)"><%= contratos.vencidos %></div></a>
+</div>
+
+<div class="panel">
+  <h2>Últimos orçamentos</h2>
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>#</th><th>Empresa / Contato</th><th>Serviço</th><th>Status</th><th>Recebido</th><th></th></tr></thead>
+    <tbody>
+      <% if (ultimos.length === 0) { %>
+        <tr><td colspan="6" class="empty">Nenhum orçamento ainda. As solicitações do site aparecem aqui automaticamente.</td></tr>
+      <% } %>
+      <% ultimos.forEach(q => { %>
+        <tr>
+          <td class="num"><%= String(q.id).padStart(4,'0') %></td>
+          <td><strong><%= q.empresa || q.nome %></strong><br><span style="color:var(--ink-3);font-size:13px"><%= q.nome %></span></td>
+          <td><%= q.servico %></td>
+          <td><span class="badge <%= q.status %>"><%= q.status.replace('_',' ') %></span></td>
+          <td style="color:var(--ink-3)"><%= q.created_at %></td>
+          <td><a class="linkish" href="/admin/orcamentos/<%= q.id %>">abrir →</a></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<a class="btn ghost" href="/admin/orcamentos">Ver todos os orçamentos</a>
+<a class="btn ghost" href="/admin/estoque">Gerenciar estoque</a>
+
+<%- include('partials/footer') %>

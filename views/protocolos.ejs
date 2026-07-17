@@ -1,0 +1,81 @@
+<%- include('partials/header', { title: 'Protocolos' }) %>
+<%
+function br(d){ if(!d) return '—'; const p=d.split('-'); return p.length===3? p[2]+'/'+p[1]+'/'+p[0] : d; }
+function money(v){ return (v||v===0) ? Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}) : '—'; }
+%>
+
+<h1 class="page">Protocolos / Contratos</h1>
+<p class="sub">Orçamentos aceitos que viraram contratação. Acompanhe início e vencimento para renovação e cobrança.</p>
+
+<% if (stats.vencidos>0 || stats.vencendo>0) { %>
+  <div class="flash erro" style="margin-bottom:18px">
+    <% if (stats.vencidos>0) { %><strong><%= stats.vencidos %></strong> vencido(s)<% } %>
+    <% if (stats.vencidos>0 && stats.vencendo>0) { %> · <% } %>
+    <% if (stats.vencendo>0) { %><strong><%= stats.vencendo %></strong> vencendo em até 5 dias<% } %>.
+  </div>
+<% } %>
+
+<div class="row-actions" style="margin-bottom:18px">
+  <% const fl = [['','Todos'],['ativos','Ativos'],['vencendo','Vencendo'],['vencidos','Vencidos'],['encerrados','Encerrados']]; %>
+  <% fl.forEach(([v,l]) => { %>
+    <a class="btn sm <%= situacao===v ? '' : 'ghost' %>" href="/admin/protocolos<%= v ? '?situacao='+v : '' %>"><%= l %></a>
+  <% }) %>
+</div>
+
+<div class="panel">
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>Empresa</th><th>Serviço</th><th>Valor</th><th>Início</th><th>Vencimento</th><th>Situação</th><th></th></tr></thead>
+    <tbody>
+      <% if (contratos.length === 0) { %><tr><td colspan="7" class="empty">Nenhum contrato neste filtro. Aceite um orçamento ou registre um contrato no formulário abaixo.</td></tr><% } %>
+      <% contratos.forEach(c => { %>
+        <tr>
+          <td><strong><%= c.empresa %></strong><% if (c.contato) { %><br><span style="color:var(--ink-3);font-size:13px"><%= c.contato %></span><% } %></td>
+          <td><%= c.servico || '—' %></td>
+          <td class="num"><%= money(c.valor) %></td>
+          <td style="color:var(--ink-3)"><%= br(c.data_inicio) %></td>
+          <td>
+            <%= br(c.data_vencimento) %>
+            <% if (c.status==='ativo' && c.diasParaVencer !== null) { %>
+              <% if (c.vencido) { %><br><span class="badge perdido">vencido há <%= Math.abs(c.diasParaVencer) %>d</span>
+              <% } else if (c.vencendo) { %><br><span class="badge em_analise">vence em <%= c.diasParaVencer %>d</span><% } %>
+            <% } %>
+          </td>
+          <td>
+            <% if (c.status==='ativo') { %><span class="badge fechado">ativo</span>
+            <% } else if (c.status==='encerrado') { %><span class="badge devolvida">encerrado</span>
+            <% } else { %><span class="badge perdido">cancelado</span><% } %>
+          </td>
+          <td><a class="linkish" href="/admin/protocolos/<%= c.id %>">abrir →</a></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<fieldset>
+  <legend>Novo contrato (manual)</legend>
+  <form method="post" action="/admin/protocolos" class="stack">
+    <div class="grid2">
+      <div class="field"><label>Empresa</label><input name="empresa" required></div>
+      <div class="field"><label>Contato</label><input name="contato" placeholder="opcional"></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>E-mail</label><input name="email" type="email" placeholder="opcional"></div>
+      <div class="field"><label>Serviço</label><input name="servico" placeholder="ex: Portaria"></div>
+    </div>
+    <div class="grid3">
+      <div class="field"><label>Valor (R$)</label><input name="valor" inputmode="decimal" placeholder="ex: 8500.00"></div>
+      <div class="field"><label>Início</label><input name="data_inicio" type="date" required></div>
+      <div class="field"><label>Vencimento</label><input name="data_vencimento" type="date"></div>
+    </div>
+    <div class="field"><label>Observações</label><input name="obs" placeholder="opcional"></div>
+    <button class="btn" type="submit">Registrar contrato</button>
+  </form>
+  <p style="color:var(--ink-3);font-size:12.5px;margin:14px 0 0">
+    Dica: você também pode criar um contrato direto de um orçamento aceito, em Orçamentos → abrir → "Gerar contrato".
+  </p>
+</fieldset>
+
+<%- include('partials/footer') %>

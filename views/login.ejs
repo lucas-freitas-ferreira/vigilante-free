@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entrar — Painel Vigilante Free</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=IBM+Plex+Mono:wght@400;500&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <span class="brand">VIGILANTE <span>FREE</span></span>
+      <div class="tag">PAINEL DE GESTÃO — ACESSO RESTRITO</div>
+      <% if (flash) { %><div class="flash <%= flash.type %>"><%= flash.msg %></div><% } %>
+      <form method="post" action="/admin/login" class="stack">
+        <div class="field">
+          <label>Usuário</label>
+          <input name="username" autocomplete="username" autofocus required>
+        </div>
+        <div class="field">
+          <label>Senha</label>
+          <input name="senha" type="password" autocomplete="current-password" required>
+        </div>
+        <button class="btn" type="submit" style="width:100%;margin-top:6px">Entrar</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

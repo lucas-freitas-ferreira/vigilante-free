@@ -1,0 +1,20 @@
+# ===== Banco de dados (Supabase / PostgreSQL) =====
+# TROQUE [YOUR-PASSWORD] pela senha do banco que você definiu ao criar o projeto no Supabase.
+DATABASE_URL=postgresql://postgres.elpjnvmwjkegobzgkqpa:Vigilant879312@aws-1-us-west-2.pooler.supabase.com:5432/postgres
+
+# ===== Segurança =====
+SESSION_SECRET=6d288111150787961040ea4ab96e621bd4c2884ad2d590487a3f750abe0e3169
+
+# Login inicial do painel (criado só na primeira vez)
+ADMIN_USER=admin
+ADMIN_PASS=admin123
+
+NODE_ENV=production
+
+# ===== (Opcional) MySQL local — usado só pelo importar-mysql.js =====
+# Preencha se o seu MySQL do XAMPP tiver senha ou outro nome de banco.
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=root
+DB_PASS=
+DB_NAME=vigilante_free

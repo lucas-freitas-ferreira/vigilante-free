@@ -1,0 +1,144 @@
+<%- include('partials/header', { title: 'Estoque & Locação' }) %>
+<% function money(v){ return (v || v===0) ? Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}) : '—'; } %>
+
+<h1 class="page">Estoque &amp; Locação</h1>
+<p class="sub">Acompanhe o estoque físico de aparelhos e quais estão locados, para qual empresa.</p>
+
+<div class="stats" style="grid-template-columns:repeat(3,1fr)">
+  <div class="card"><div class="k">Aparelhos (total)</div><div class="v"><%= totais.totalAparelhos %></div></div>
+  <div class="card"><div class="k">Em estoque</div><div class="v ok"><%= totais.totalEstoque %></div></div>
+  <div class="card"><div class="k">Locados</div><div class="v info"><%= totais.totalLocados %></div></div>
+</div>
+
+<!-- Modelos -->
+<div class="panel">
+  <h2>Modelos de aparelho</h2>
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>Modelo</th><th>Descrição</th><th>Preço unit.</th><th>Total</th><th>Locados</th><th>Em estoque</th><th></th></tr></thead>
+    <tbody>
+      <% if (modelos.length === 0) { %><tr><td colspan="7" class="empty">Nenhum modelo cadastrado. Cadastre o primeiro aparelho no formulário abaixo.</td></tr><% } %>
+      <% modelos.forEach(m => { %>
+        <tr>
+          <td><strong><%= m.modelo %></strong></td>
+          <td style="color:var(--ink-2)"><%= m.descricao || '—' %></td>
+          <td class="num" style="color:<%= Number(m.preco)>0?'var(--signal)':'var(--ink-3)' %>;font-weight:600"><%= money(m.preco) %></td>
+          <td class="num"><span class="pill"><%= m.total %></span></td>
+          <td class="num"><span class="pill"><%= m.locados %></span></td>
+          <td class="num"><span class="pill" style="border-color:<%= m.em_estoque>0?'var(--line)':'rgba(224,109,109,.5)' %>"><%= m.em_estoque %></span></td>
+          <td>
+            <form method="post" action="/admin/estoque/modelo/<%= m.id %>/excluir"
+                  onsubmit="return confirm('Remover o modelo <%= m.modelo %> e todas as suas locações?')">
+              <button class="btn danger sm" type="submit">remover</button>
+            </form>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<!-- Locações ativas -->
+<div class="panel">
+  <h2>Locações ativas — quem está com os aparelhos</h2>
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>Empresa</th><th>Contato</th><th>Modelo</th><th>Qtd.</th><th>Início</th><th>Devolução prev.</th><th></th></tr></thead>
+    <tbody>
+      <% if (locacoes.length === 0) { %><tr><td colspan="7" class="empty">Nenhuma locação ativa. Registre uma locação para acompanhar quem está com os aparelhos.</td></tr><% } %>
+      <% locacoes.forEach(r => { %>
+        <tr>
+          <td><strong><%= r.empresa %></strong></td>
+          <td style="color:var(--ink-2)"><%= r.contato || '—' %></td>
+          <td><%= r.modelo %></td>
+          <td class="num"><span class="pill"><%= r.quantidade %></span></td>
+          <td style="color:var(--ink-3)"><%= r.data_inicio %></td>
+          <td style="color:var(--ink-3)"><%= r.data_prevista || '—' %></td>
+          <td class="row-actions">
+            <form method="post" action="/admin/estoque/locacao/<%= r.id %>/devolver">
+              <button class="btn ghost sm" type="submit">devolver</button>
+            </form>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="grid2">
+  <!-- Nova locação -->
+  <fieldset>
+    <legend>Registrar locação</legend>
+    <form method="post" action="/admin/estoque/locacao" class="stack">
+      <div class="field">
+        <label>Modelo</label>
+        <select name="inventory_id" required>
+          <option value="">Selecione…</option>
+          <% modelos.forEach(m => { %>
+            <option value="<%= m.id %>"><%= m.modelo %> (<%= m.em_estoque %> em estoque)</option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Empresa</label><input name="empresa" required></div>
+        <div class="field"><label>Contato</label><input name="contato" placeholder="opcional"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Quantidade</label><input name="quantidade" type="number" min="1" required></div>
+        <div class="field"><label>Devolução prevista</label><input name="data_prevista" type="date"></div>
+      </div>
+      <div class="field"><label>Observações</label><input name="obs" placeholder="opcional"></div>
+      <button class="btn" type="submit">Registrar locação</button>
+    </form>
+  </fieldset>
+
+  <!-- Novo modelo -->
+  <fieldset>
+    <legend>Cadastrar modelo / adicionar ao estoque</legend>
+    <form method="post" action="/admin/estoque/modelo" class="stack">
+      <div class="field"><label>Modelo</label><input name="modelo" placeholder="ex: Motorola DEP450" required></div>
+      <div class="field"><label>Descrição</label><input name="descricao" placeholder="ex: Rádio HT digital UHF"></div>
+      <div class="grid2">
+        <div class="field"><label>Quantidade total possuída</label><input name="total" type="number" min="0" required></div>
+        <div class="field"><label>Preço unit. (R$)</label><input name="preco" inputmode="decimal" placeholder="ex: 150.00"></div>
+      </div>
+      <button class="btn" type="submit">Adicionar modelo</button>
+    </form>
+    <p style="color:var(--ink-3);font-size:12.5px;margin:14px 0 0">
+      "Em estoque" é calculado automaticamente: total do modelo menos as unidades em locações ativas.
+      Modelos com preço aparecem disponíveis para adicionar aos orçamentos.
+    </p>
+  </fieldset>
+</div>
+
+<!-- Histórico -->
+<% if (historico.length) { %>
+<div class="panel">
+  <h2>Histórico de devoluções</h2>
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>Empresa</th><th>Modelo</th><th>Qtd.</th><th>Período</th><th></th></tr></thead>
+    <tbody>
+      <% historico.forEach(r => { %>
+        <tr>
+          <td><%= r.empresa %></td>
+          <td><%= r.modelo %></td>
+          <td class="num"><%= r.quantidade %></td>
+          <td style="color:var(--ink-3)"><%= r.data_inicio %> — <span class="badge devolvida">devolvida</span></td>
+          <td>
+            <form method="post" action="/admin/estoque/locacao/<%= r.id %>/excluir"
+                  onsubmit="return confirm('Excluir este registro do histórico?')">
+              <button class="btn danger sm" type="submit">excluir</button>
+            </form>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  </div>
+</div>
+<% } %>
+
+<%- include('partials/footer') %>

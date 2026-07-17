@@ -1,0 +1,25 @@
+{
+  "name": "vigilante-free-admin",
+  "version": "1.0.0",
+  "description": "Site institucional + painel de gestão (orçamentos, estoque e locação de rádios) do Grupo Vigilante Free",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node -e \"require('./db').init().then(()=>{console.log('ok');process.exit(0)})\""
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "connect-pg-simple": "^10.0.0",
+    "dotenv": "^16.6.1",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "mysql2": "^3.23.0",
+    "pdfkit": "^0.15.2",
+    "pg": "^8.22.0"
+  }
+}
