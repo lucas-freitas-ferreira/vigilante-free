@@ -1,0 +1,71 @@
+<%- include('partials/header', { title: 'Cliente' }) %>
+<%
+function v(x){ return (x==null?'':String(x)).replace(/"/g,'&quot;'); }
+function money(x){ return (x||x===0) ? Number(x).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}) : '—'; }
+function fmtCnpj(x){ const d=String(x||'').replace(/\D/g,''); if(d.length===14) return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5'); if(d.length===11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4'); return x||'—'; }
+%>
+
+<a class="back" href="/admin/clientes">← voltar para clientes</a>
+
+<div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin:8px 0 4px;flex-wrap:wrap">
+  <h1 class="page" style="margin:0"><%= cliente.empresa || cliente.nome || 'Cliente' %></h1>
+  <a class="btn sm" href="/admin/orcamentos/novo?cliente=<%= cliente.id %>">+ Novo orçamento para este cliente</a>
+</div>
+<p class="sub">
+  <%= cliente.cnpj ? fmtCnpj(cliente.cnpj) : 'Sem documento' %>
+  · <%= orcamentos.length %> orçamento(s) no histórico
+</p>
+
+<fieldset>
+  <legend>Dados do cliente</legend>
+  <form method="post" action="/admin/clientes/<%= cliente.id %>" class="stack">
+    <div class="grid2">
+      <div class="field"><label>Empresa</label><input name="empresa" value="<%= v(cliente.empresa) %>"></div>
+      <div class="field"><label>Contato</label><input name="nome" value="<%= v(cliente.nome) %>"></div>
+    </div>
+    <div class="grid3">
+      <div class="field"><label>CNPJ / CPF</label><input name="cnpj" value="<%= v(cliente.cnpj) %>" placeholder="somente números"></div>
+      <div class="field"><label>E-mail</label><input name="email" type="email" value="<%= v(cliente.email) %>"></div>
+      <div class="field"><label>Telefone</label><input name="telefone" value="<%= v(cliente.telefone) %>"></div>
+    </div>
+    <div class="field"><label>Endereço</label><input name="endereco" value="<%= v(cliente.endereco) %>" placeholder="opcional"></div>
+    <div class="field"><label>Observações</label><textarea name="obs" rows="3"><%= cliente.obs || '' %></textarea></div>
+    <div class="row-actions">
+      <button class="btn" type="submit">Salvar alterações</button>
+    </div>
+  </form>
+</fieldset>
+
+<div class="panel" style="margin-top:22px">
+  <h2>Orçamentos deste cliente</h2>
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>#</th><th>Serviço</th><th>Valor</th><th>Status</th><th>Recebido</th><th></th></tr></thead>
+    <tbody>
+      <% if (orcamentos.length === 0) { %>
+        <tr><td colspan="6" class="empty">Nenhum orçamento vinculado a este cliente ainda.</td></tr>
+      <% } %>
+      <% orcamentos.forEach(q => { %>
+        <tr>
+          <td class="num"><%= String(q.id).padStart(4,'0') %></td>
+          <td><%= q.servico %></td>
+          <td class="num"><%= money(q.valor_total) %></td>
+          <td><span class="badge <%= q.status %>"><%= q.status.replace('_',' ') %></span></td>
+          <td style="color:var(--ink-3);font-size:13px"><%= q.created_at %></td>
+          <td><a class="linkish" href="/admin/orcamentos/<%= q.id %>">abrir →</a></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<fieldset style="margin-top:20px">
+  <legend>Excluir</legend>
+  <form method="post" action="/admin/clientes/<%= cliente.id %>/excluir"
+        onsubmit="return confirm('Remover este cliente do cadastro? Os orçamentos não são apagados.')">
+    <button class="btn danger" type="submit">Excluir cliente</button>
+  </form>
+</fieldset>
+
+<%- include('partials/footer') %>

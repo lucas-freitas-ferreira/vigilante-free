@@ -185,6 +185,7 @@ td.num,.num{font-variant-numeric:tabular-nums}
 .badge.perdido{background:rgba(224,109,109,.14);color:var(--danger);border-color:rgba(224,109,109,.3)}
 .badge.ativa,.badge.ativo{background:rgba(242,169,59,.14);color:var(--signal);border-color:rgba(242,169,59,.3)}
 .badge.devolvida{background:rgba(114,124,134,.16);color:var(--ink-3);border-color:rgba(114,124,134,.28)}
+.badge.pago{background:rgba(72,187,120,.14);color:#22865a;border-color:rgba(72,187,120,.3)}
 .pill{
   display:inline-block;min-width:28px;text-align:center;padding:3px 9px;border-radius:var(--r-sm);
   background:var(--surface-3);border:1px solid var(--line);font-variant-numeric:tabular-nums;font-size:13px;
@@ -359,3 +360,81 @@ legend{
   *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
   .brand .dot{animation:none}
 }
+
+/* ============================================================
+   Melhorias: badge do menu, botão WhatsApp, modal de edição
+   ============================================================ */
+
+/* Badge de notificação no menu (orçamentos em aberto) */
+.side a .nav-badge{
+  margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:999px;
+  background:var(--signal);color:var(--signal-ink);
+  font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;line-height:20px;
+  text-align:center;font-variant-numeric:tabular-nums;
+  box-shadow:0 0 0 2px var(--surface-1), 0 0 10px rgba(242,169,59,.45);
+}
+.side a.active .nav-badge{box-shadow:0 0 0 2px rgba(242,169,59,.11), 0 0 10px rgba(242,169,59,.45)}
+
+/* Botão de ação em WhatsApp */
+.btn.wa{background:#25d366;border-color:#1fae54;color:#0a2e17;box-shadow:var(--shadow-sm)}
+.btn.wa:hover{background:#2ee06f;border-color:#25d366}
+.btn.wa svg{width:16px;height:16px;margin-right:6px;vertical-align:-3px}
+.linkish.wa{color:#3ddc84}
+
+/* Modal genérico (edição de estoque) */
+dialog.modal{
+  border:1px solid var(--line);background:var(--surface-1);color:var(--ink);
+  border-radius:var(--r-lg);box-shadow:var(--shadow-lg);padding:0;width:min(520px,92vw);
+}
+dialog.modal::backdrop{background:rgba(6,8,10,.66);backdrop-filter:blur(2px)}
+dialog.modal .modal-head{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:16px 20px;border-bottom:1px solid var(--line);
+}
+dialog.modal .modal-head h3{margin:0;font-family:'Barlow Condensed',sans-serif;font-size:19px;letter-spacing:.01em}
+dialog.modal .modal-body{padding:18px 20px}
+dialog.modal .modal-foot{
+  display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--line);
+}
+dialog.modal .x{background:none;border:none;color:var(--ink-3);font-size:22px;line-height:1;cursor:pointer;padding:2px 6px;border-radius:6px}
+dialog.modal .x:hover{color:var(--ink);background:var(--surface-2)}
+
+/* ===== Autocomplete dropdown ===== */
+.ac-wrap{position:relative}
+.ac-list{
+  position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:90;
+  background:var(--surface-1);
+  border:1px solid var(--line);
+  border-radius:var(--r-md);
+  box-shadow:var(--shadow-md), 0 0 0 1px rgba(255,255,255,.04) inset;
+  overflow:hidden;display:none;
+  backdrop-filter:blur(12px);
+}
+.ac-list.open{display:block;animation:acFadeIn .14s var(--ease-out)}
+@keyframes acFadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.ac-item{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 14px;cursor:pointer;
+  font-size:13.5px;
+  border-bottom:1px solid var(--line-soft);
+  transition:background .12s var(--ease-out);
+}
+.ac-item:last-child{border-bottom:none}
+.ac-item:hover,.ac-item.active{background:var(--surface-2)}
+.ac-item.active{box-shadow:inset 3px 0 0 var(--signal)}
+.ac-item .ac-icon{
+  flex:none;width:28px;height:28px;border-radius:var(--r-sm);
+  background:var(--surface-3);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--ink-3);font-size:12px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.03em;
+}
+.ac-item .ac-text{flex:1;min-width:0}
+.ac-item .ac-text strong{font-weight:600;color:var(--ink);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ac-item .ac-text small{color:var(--ink-3);font-size:11.5px;display:block;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ===== Filtro instantâneo — transição suave nas linhas ===== */
+#tblBody tr[data-nome], #tblBody tr[data-cnpj], #tblModelos tr[data-modelo]{
+  transition:opacity .15s var(--ease-out);
+}
+#fCount{font-variant-numeric:tabular-nums}

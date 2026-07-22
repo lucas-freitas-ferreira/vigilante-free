@@ -88,6 +88,7 @@ async function createSchema() {
   await ensureColumn('quotes', 'data_inicio', 'DATE');
   await ensureColumn('quotes', 'data_fim', 'DATE');
   await ensureColumn('quotes', 'cnpj', 'VARCHAR(18)');
+  await ensureColumn('quotes', 'observacoes', 'TEXT');
 
   await run(`CREATE TABLE IF NOT EXISTS tabela_precos (
     id              SERIAL PRIMARY KEY,
@@ -107,11 +108,13 @@ async function createSchema() {
     id           SERIAL PRIMARY KEY,
     modelo       VARCHAR(191) NOT NULL,
     descricao    VARCHAR(255),
+    numero_serie VARCHAR(255),
     total        INTEGER NOT NULL DEFAULT 0,
     preco        NUMERIC(12,2) NOT NULL DEFAULT 0,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
   )`);
   await ensureColumn('inventory', 'preco', 'NUMERIC(12,2) NOT NULL DEFAULT 0');
+  await ensureColumn('inventory', 'numero_serie', 'VARCHAR(255)');
 
   await run(`CREATE TABLE IF NOT EXISTS rentals (
     id            SERIAL PRIMARY KEY,
@@ -136,10 +139,27 @@ async function createSchema() {
     valor           NUMERIC(12,2),
     data_inicio     DATE NOT NULL,
     data_vencimento DATE,
+    data_pagamento  DATE,
     status          VARCHAR(20) NOT NULL DEFAULT 'ativo',
     obs             TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
   )`);
+  await ensureColumn('contracts', 'data_pagamento', 'DATE');
+  // Cadastro de clientes — alimentado automaticamente pelas informações dos orçamentos.
+  await run(`CREATE TABLE IF NOT EXISTS clientes (
+    id           SERIAL PRIMARY KEY,
+    cnpj         VARCHAR(18),
+    empresa      VARCHAR(191),
+    nome         VARCHAR(191),
+    email        VARCHAR(191),
+    telefone     VARCHAR(60),
+    endereco     VARCHAR(255),
+    obs          TEXT,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  // Índices para o upsert por documento/e-mail (parciais: só quando há valor).
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS clientes_cnpj_uidx ON clientes (cnpj) WHERE cnpj IS NOT NULL AND cnpj <> ''`);
 }
 
 async function seed() {
@@ -178,6 +198,31 @@ const repo = {
   delQuote: (id) => run('DELETE FROM quotes WHERE id = :id', { id }),
   countQuotesNew: () => one("SELECT COUNT(*) AS c FROM quotes WHERE status = 'novo'"),
   countQuotes: () => one('SELECT COUNT(*) AS c FROM quotes'),
+  // "Em aberto" = tudo que ainda não foi fechado nem perdido.
+  countQuotesOpen: () => one("SELECT COUNT(*) AS c FROM quotes WHERE status NOT IN ('fechado','perdido')"),
+
+  // Cria um orçamento manualmente pelo painel (mesma base do formulário público).
+  insertQuoteManual: (d) => run(`INSERT INTO quotes (nome, empresa, email, telefone, servico, prazo, detalhes, cnpj, data_inicio, data_fim, responsavel, status)
+                            VALUES (:nome,:empresa,:email,:telefone,:servico,:prazo,:detalhes,:cnpj,:data_inicio,:data_fim,:responsavel,'novo') RETURNING id`, d),
+
+  // Duplica um orçamento (cabeçalho + itens). Retorna o id do novo orçamento.
+  duplicateQuote: async (id) => {
+    const orig = await one('SELECT * FROM quotes WHERE id = :id', { id });
+    if (!orig) return null;
+    const novo = await run(`INSERT INTO quotes (nome, empresa, email, telefone, servico, prazo, detalhes, cnpj, data_inicio, data_fim, responsavel, valor_total, status)
+        VALUES (:nome,:empresa,:email,:telefone,:servico,:prazo,:detalhes,:cnpj,:data_inicio,:data_fim,:responsavel,:valor_total,'novo') RETURNING id`,
+      { nome: orig.nome, empresa: orig.empresa, email: orig.email, telefone: orig.telefone,
+        servico: orig.servico, prazo: orig.prazo, detalhes: orig.detalhes, cnpj: orig.cnpj,
+        data_inicio: orig.data_inicio, data_fim: orig.data_fim, responsavel: orig.responsavel,
+        valor_total: orig.valor_total });
+    const novoId = novo.insertId;
+    const itens = await all('SELECT * FROM orcamento_itens WHERE orcamento_id = :id', { id });
+    for (const it of itens) {
+      await run('INSERT INTO orcamento_itens (orcamento_id, nome, quantidade, valor_unitario) VALUES (:id,:nome,:qtd,:val)',
+        { id: novoId, nome: it.nome, qtd: it.quantidade, val: it.valor_unitario });
+    }
+    return novoId;
+  },
 
   // Catálogo de orçamento (tabela de preços + estoque com preço)
   getPrecos: () => all('SELECT * FROM tabela_precos ORDER BY nome'),
@@ -188,9 +233,9 @@ const repo = {
       FROM inventory WHERE preco > 0
     ORDER BY nome`),
   getOrcamentoItens: (orcamentoId) => all('SELECT * FROM orcamento_itens WHERE orcamento_id = :id', { id: orcamentoId }),
-  saveOrcamento: async (id, responsavel, valorTotal, itens, dataInicio, dataFim) => {
-    await run('UPDATE quotes SET responsavel = :r, valor_total = :v, data_inicio = :di, data_fim = :df WHERE id = :id',
-      { r: responsavel, v: valorTotal, di: dataInicio || null, df: dataFim || null, id });
+  saveOrcamento: async (id, responsavel, valorTotal, itens, dataInicio, dataFim, observacoes) => {
+    await run('UPDATE quotes SET responsavel = :r, valor_total = :v, data_inicio = :di, data_fim = :df, observacoes = :obs WHERE id = :id',
+      { r: responsavel, v: valorTotal, di: dataInicio || null, df: dataFim || null, obs: observacoes || null, id });
     await run('DELETE FROM orcamento_itens WHERE orcamento_id = :id', { id });
     for (const item of itens) {
       await run('INSERT INTO orcamento_itens (orcamento_id, nome, quantidade, valor_unitario) VALUES (:id, :nome, :qtd, :val)',
@@ -199,7 +244,8 @@ const repo = {
   },
 
   // Estoque
-  insInv: (modelo, descricao, total, preco) => run('INSERT INTO inventory (modelo, descricao, total, preco) VALUES (:m,:d,:t,:p)', { m: modelo, d: descricao, t: total, p: preco || 0 }),
+  insInv: (modelo, descricao, total, preco, numeroSerie) => run('INSERT INTO inventory (modelo, descricao, total, preco, numero_serie) VALUES (:m,:d,:t,:p,:ns)', { m: modelo, d: descricao, t: total, p: preco || 0, ns: numeroSerie || null }),
+  updInv: (id, modelo, descricao, total, preco, numeroSerie) => run('UPDATE inventory SET modelo=:m, descricao=:d, total=:t, preco=:p, numero_serie=:ns WHERE id=:id', { id, m: modelo, d: descricao, t: total, p: preco || 0, ns: numeroSerie || null }),
   delInv: (id) => run('DELETE FROM inventory WHERE id = :id', { id }),
   getInv: (id) => one('SELECT * FROM inventory WHERE id = :id', { id }),
   inventoryView: () => all(`SELECT i.*, COALESCE((SELECT SUM(r.quantidade) FROM rentals r
@@ -226,8 +272,49 @@ const repo = {
   getContract: (id) => one('SELECT * FROM contracts WHERE id = :id', { id }),
   updateContract: (d) => run(`UPDATE contracts SET empresa=:empresa, contato=:contato, email=:email,
                               servico=:servico, valor=:valor, data_inicio=:data_inicio,
-                              data_vencimento=:data_vencimento, status=:status, obs=:obs WHERE id=:id`, d),
+                              data_vencimento=:data_vencimento, data_pagamento=:data_pagamento, status=:status, obs=:obs WHERE id=:id`, d),
   delContract: (id) => run('DELETE FROM contracts WHERE id = :id', { id }),
+
+  // Clientes — cadastro alimentado pelas informações preenchidas nos orçamentos.
+  listClientes: () => all(`SELECT c.*,
+      (SELECT COUNT(*) FROM quotes q WHERE (c.cnpj IS NOT NULL AND c.cnpj <> '' AND q.cnpj = c.cnpj)
+                                        OR ((c.cnpj IS NULL OR c.cnpj = '') AND q.email = c.email)) AS orcamentos
+      FROM clientes c ORDER BY COALESCE(NULLIF(c.empresa,''), c.nome)`),
+  getCliente: (id) => one('SELECT * FROM clientes WHERE id = :id', { id }),
+  quotesByCliente: (c) => all(`SELECT * FROM quotes
+      WHERE (:cnpj <> '' AND cnpj = :cnpj) OR (:cnpj = '' AND email = :email)
+      ORDER BY created_at DESC, id DESC`, { cnpj: c.cnpj || '', email: c.email || '' }),
+  updateCliente: (d) => run(`UPDATE clientes SET cnpj=:cnpj, empresa=:empresa, nome=:nome, email=:email,
+      telefone=:telefone, endereco=:endereco, obs=:obs, updated_at=now() WHERE id=:id`, d),
+  delCliente: (id) => run('DELETE FROM clientes WHERE id = :id', { id }),
+  // Cria ou atualiza um cliente a partir dos dados de um orçamento.
+  // Casa por CNPJ/CPF quando houver documento; senão, por e-mail. Só sobrescreve campos com valor.
+  upsertCliente: async (d) => {
+    const cnpj = (d.cnpj || '').trim();
+    const email = (d.email || '').trim();
+    let existente = null;
+    if (cnpj) existente = await one('SELECT * FROM clientes WHERE cnpj = :cnpj', { cnpj });
+    if (!existente && email) existente = await one("SELECT * FROM clientes WHERE (cnpj IS NULL OR cnpj = '') AND email = :email", { email });
+    if (existente) {
+      await run(`UPDATE clientes SET
+          cnpj     = COALESCE(NULLIF(:cnpj,''), cnpj),
+          empresa  = COALESCE(NULLIF(:empresa,''), empresa),
+          nome     = COALESCE(NULLIF(:nome,''), nome),
+          email    = COALESCE(NULLIF(:email,''), email),
+          telefone = COALESCE(NULLIF(:telefone,''), telefone),
+          endereco = COALESCE(NULLIF(:endereco,''), endereco),
+          updated_at = now()
+        WHERE id = :id`,
+        { id: existente.id, cnpj, empresa: d.empresa || '', nome: d.nome || '',
+          email, telefone: d.telefone || '', endereco: d.endereco || '' });
+      return existente.id;
+    }
+    const r = await run(`INSERT INTO clientes (cnpj, empresa, nome, email, telefone, endereco)
+        VALUES (:cnpj,:empresa,:nome,:email,:telefone,:endereco) RETURNING id`,
+      { cnpj: cnpj || null, empresa: d.empresa || null, nome: d.nome || null,
+        email: email || null, telefone: d.telefone || null, endereco: d.endereco || null });
+    return r.insertId;
+  },
 };
 
 module.exports = { pool, init, seed, all, one, run, repo };

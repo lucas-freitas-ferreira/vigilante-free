@@ -1,10 +1,10 @@
-<%- include('partials/header', { title: 'Protocolos' }) %>
+<%- include('partials/header', { title: 'Faturamento' }) %>
 <%
 function br(d){ if(!d) return '—'; const p=d.split('-'); return p.length===3? p[2]+'/'+p[1]+'/'+p[0] : d; }
 function money(v){ return (v||v===0) ? Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}) : '—'; }
 %>
 
-<h1 class="page">Protocolos / Contratos</h1>
+<h1 class="page">Faturamento</h1>
 <p class="sub">Orçamentos aceitos que viraram contratação. Acompanhe início e vencimento para renovação e cobrança.</p>
 
 <% if (stats.vencidos>0 || stats.vencendo>0) { %>
@@ -16,20 +16,32 @@ function money(v){ return (v||v===0) ? Number(v).toLocaleString('pt-BR',{style:'
 <% } %>
 
 <div class="row-actions" style="margin-bottom:18px">
-  <% const fl = [['','Todos'],['ativos','Ativos'],['vencendo','Vencendo'],['vencidos','Vencidos'],['encerrados','Encerrados']]; %>
+  <% const fl = [['','Todos'],['ativos','Ativos'],['enviado','Enviados'],['pago','Pagos'],['vencendo','Vencendo'],['vencidos','Vencidos'],['encerrados','Encerrados']]; %>
   <% fl.forEach(([v,l]) => { %>
     <a class="btn sm <%= situacao===v ? '' : 'ghost' %>" href="/admin/protocolos<%= v ? '?situacao='+v : '' %>"><%= l %></a>
   <% }) %>
 </div>
 
+<fieldset style="margin-bottom:18px;padding:14px 18px">
+  <legend>Filtrar</legend>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+    <div class="field" style="flex:1;min-width:160px"><label>Nome do cliente</label><input id="fNome" placeholder="Digite para filtrar…" autocomplete="off"></div>
+    <div class="field" style="min-width:140px"><label>Data início (de)</label><input id="fDi" type="date"></div>
+    <div class="field" style="min-width:140px"><label>Data início (até)</label><input id="fDf" type="date"></div>
+    <span id="fCount" style="font-size:12.5px;color:var(--ink-3);padding-bottom:10px"></span>
+  </div>
+</fieldset>
+
 <div class="panel">
   <div class="table-scroll">
   <table>
-    <thead><tr><th>Empresa</th><th>Serviço</th><th>Valor</th><th>Início</th><th>Vencimento</th><th>Situação</th><th></th></tr></thead>
-    <tbody>
-      <% if (contratos.length === 0) { %><tr><td colspan="7" class="empty">Nenhum contrato neste filtro. Aceite um orçamento ou registre um contrato no formulário abaixo.</td></tr><% } %>
+    <thead><tr><th>Empresa</th><th>Serviço</th><th>Valor</th><th>Início</th><th>Vencimento</th><th>Pagamento</th><th>Situação</th><th></th></tr></thead>
+    <tbody id="tblBody">
+      <% if (contratos.length === 0) { %><tr><td colspan="8" class="empty">Nenhum contrato neste filtro. Aceite um orçamento ou registre um contrato no formulário abaixo.</td></tr><% } %>
       <% contratos.forEach(c => { %>
-        <tr>
+        <tr class="js-row-click" data-href="/admin/protocolos/<%= c.id %>" style="cursor:pointer"
+            data-nome="<%= (c.empresa||'').toLowerCase() %> <%= (c.contato||'').toLowerCase() %>"
+            data-di="<%= c.data_inicio || '' %>">
           <td><strong><%= c.empresa %></strong><% if (c.contato) { %><br><span style="color:var(--ink-3);font-size:13px"><%= c.contato %></span><% } %></td>
           <td><%= c.servico || '—' %></td>
           <td class="num"><%= money(c.valor) %></td>
@@ -41,12 +53,21 @@ function money(v){ return (v||v===0) ? Number(v).toLocaleString('pt-BR',{style:'
               <% } else if (c.vencendo) { %><br><span class="badge em_analise">vence em <%= c.diasParaVencer %>d</span><% } %>
             <% } %>
           </td>
+          <td style="color:<%= c.data_pagamento ? 'var(--ok)' : 'var(--ink-3)' %>"><%= br(c.data_pagamento) %></td>
           <td>
             <% if (c.status==='ativo') { %><span class="badge fechado">ativo</span>
+            <% } else if (c.status==='enviado') { %><span class="badge enviado">enviado</span>
+            <% } else if (c.status==='pago') { %><span class="badge pago">pago</span>
             <% } else if (c.status==='encerrado') { %><span class="badge devolvida">encerrado</span>
             <% } else { %><span class="badge perdido">cancelado</span><% } %>
           </td>
-          <td><a class="linkish" href="/admin/protocolos/<%= c.id %>">abrir →</a></td>
+          <td class="row-actions" data-no-click>
+            <a class="linkish" href="/admin/protocolos/<%= c.id %>">editar</a>
+            <form method="post" action="/admin/protocolos/<%= c.id %>/excluir" style="display:inline"
+                  onsubmit="return confirm('Excluir o contrato de <%= (c.empresa||'').replace(/'/g,'') %>? Essa ação não pode ser desfeita.')">
+              <button class="linkish" type="submit" style="background:none;border:none;cursor:pointer;padding:0;font:inherit;color:var(--danger)">excluir</button>
+            </form>
+          </td>
         </tr>
       <% }) %>
     </tbody>
@@ -77,5 +98,47 @@ function money(v){ return (v||v===0) ? Number(v).toLocaleString('pt-BR',{style:'
     Dica: você também pode criar um contrato direto de um orçamento aceito, em Orçamentos → abrir → "Gerar contrato".
   </p>
 </fieldset>
+
+<style>.js-row-click:hover td{background:rgba(0,0,0,.03)}</style>
+<script>
+(function(){
+  // Filtro instantâneo
+  var fNome = document.getElementById('fNome');
+  var fDi   = document.getElementById('fDi');
+  var fDf   = document.getElementById('fDf');
+  var count = document.getElementById('fCount');
+  var rows  = Array.from(document.querySelectorAll('#tblBody tr[data-nome]'));
+
+  if (rows.length) {
+    function filter(){
+      var qNome = (fNome.value || '').trim().toLowerCase();
+      var qDi   = fDi.value || '';
+      var qDf   = fDf.value || '';
+      var shown = 0;
+      rows.forEach(function(tr){
+        var ok = true;
+        if (qNome && (tr.dataset.nome || '').indexOf(qNome) === -1) ok = false;
+        if (qDi && tr.dataset.di && tr.dataset.di < qDi) ok = false;
+        if (qDf && tr.dataset.di && tr.dataset.di > qDf) ok = false;
+        tr.style.display = ok ? '' : 'none';
+        if (ok) shown++;
+      });
+      var active = qNome || qDi || qDf;
+      count.textContent = active ? shown + ' de ' + rows.length + ' contratos' : '';
+    }
+    fNome.addEventListener('input', filter);
+    fDi.addEventListener('change', filter);
+    fDf.addEventListener('change', filter);
+  }
+
+  // Row click
+  document.querySelectorAll('.js-row-click').forEach(function(tr){
+    tr.addEventListener('click', function(e){
+      if (e.target.closest('[data-no-click]') || e.target.tagName==='A' || e.target.tagName==='BUTTON') return;
+      window.location = tr.dataset.href;
+    });
+  });
+})();
+</script>
 
 <%- include('partials/footer') %>

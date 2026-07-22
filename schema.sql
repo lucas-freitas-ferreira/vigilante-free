@@ -43,12 +43,13 @@ CREATE TABLE IF NOT EXISTS orcamento_itens (
 );
 
 CREATE TABLE IF NOT EXISTS inventory (
-  id         SERIAL PRIMARY KEY,
-  modelo     VARCHAR(191) NOT NULL,
-  descricao  VARCHAR(255),
-  total      INTEGER NOT NULL DEFAULT 0,
-  preco      NUMERIC(12,2) NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  id           SERIAL PRIMARY KEY,
+  modelo       VARCHAR(191) NOT NULL,
+  descricao    VARCHAR(255),
+  numero_serie VARCHAR(255),
+  total        INTEGER NOT NULL DEFAULT 0,
+  preco        NUMERIC(12,2) NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS rentals (
@@ -78,3 +79,17 @@ CREATE TABLE IF NOT EXISTS contracts (
   obs             TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS clientes (
+  id         SERIAL PRIMARY KEY,
+  cnpj       VARCHAR(18),
+  empresa    VARCHAR(191),
+  nome       VARCHAR(191),
+  email      VARCHAR(191),
+  telefone   VARCHAR(60),
+  endereco   VARCHAR(255),
+  obs        TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS clientes_cnpj_uidx ON clientes (cnpj) WHERE cnpj IS NOT NULL AND cnpj <> '';

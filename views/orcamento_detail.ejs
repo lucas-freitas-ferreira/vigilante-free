@@ -4,6 +4,27 @@ function money(v){ return (v || v===0) ? Number(v).toLocaleString('pt-BR',{style
 function fmtCnpj(v){ const d=String(v||'').replace(/\D/g,''); if(d.length===14) return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5'); if(d.length===11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4'); return v||'—'; }
 const st = (orcamento.status || 'novo');
 const stLabel = st.replace('_',' ');
+
+// --- WhatsApp: monta o número internacional e a mensagem pronta ---
+function fmtDataBR(s){ if(!s) return ''; const p=String(s).slice(0,10).split('-'); return p.length===3? p[2]+'/'+p[1]+'/'+p[0] : s; }
+function waNumero(tel){
+  let d = String(tel||'').replace(/\D/g,'');
+  if(!d) return '';
+  if(d.length <= 11) d = '55' + d;      // adiciona DDI do Brasil se veio só com DDD
+  return d;
+}
+const waTel = waNumero(orcamento.telefone);
+const linhasMsg = [
+  'Olá' + (orcamento.nome ? ' ' + orcamento.nome : '') + '! Segue o orçamento da Vigilante Free.',
+  '',
+  'Nº do orçamento: ' + String(orcamento.id).padStart(4,'0'),
+  orcamento.servico ? ('Serviço: ' + orcamento.servico) : '',
+  (orcamento.data_inicio || orcamento.data_fim) ? ('Período: ' + (fmtDataBR(orcamento.data_inicio)||'—') + ' a ' + (fmtDataBR(orcamento.data_fim)||'—')) : '',
+  (orcamento.valor_total && Number(orcamento.valor_total) > 0) ? ('Valor total: ' + money(orcamento.valor_total)) : '',
+  '',
+  'Qualquer dúvida estamos à disposição.'
+].filter(function(l){ return l !== ''; });
+const waHref = waTel ? ('https://wa.me/' + waTel + '?text=' + encodeURIComponent(linhasMsg.join('\n'))) : '';
 %>
 
 <a class="back" href="/admin/orcamentos">← voltar para orçamentos</a>
@@ -31,6 +52,19 @@ const stLabel = st.replace('_',' ');
     <button class="btn ghost sm" type="submit">Atualizar status</button>
   </form>
   <a class="btn sm" href="/admin/orcamentos/<%= orcamento.id %>/pdf" target="_blank" rel="noopener">Gerar PDF</a>
+  <% if (waHref) { %>
+    <a class="btn wa sm" href="<%= waHref %>" target="_blank" rel="noopener"
+       title="Abrir a conversa do cliente no WhatsApp com o orçamento">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.1-.6.2-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6.1-1.7-.9-2.9-1.6-4-3.6-.3-.5.3-.5.8-1.5.1-.2 0-.4 0-.5 0-.2-.6-1.6-.9-2.1-.2-.5-.4-.5-.6-.5h-.5c-.2 0-.5.1-.7.3-.8.8-1 1.9-.6 3.1.5 1.5 1.5 2.9 1.6 3.1.2.3 2.6 4 6.3 5.5 2.3.9 2.9.8 3.5.7.9-.1 1.7-.7 2-1.4.2-.4.2-.9.2-1 0-.2-.2-.2-.5-.4zM12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.4 1.3 4.9L2 22l5.3-1.4c1.4.8 3 1.2 4.7 1.2 5.5 0 10-4.5 10-10S17.5 2 12 2zm0 18c-1.5 0-3-.4-4.2-1.2l-.3-.2-3.1.8.8-3-.2-.3C4.4 15 4 13.5 4 12 4 7.6 7.6 4 12 4s8 3.6 8 8-3.6 8-8 8z"/></svg>
+      WhatsApp
+    </a>
+  <% } else { %>
+    <span class="btn ghost sm" style="opacity:.5;cursor:not-allowed" title="Sem telefone cadastrado neste orçamento">WhatsApp</span>
+  <% } %>
+  <form method="post" action="/admin/orcamentos/<%= orcamento.id %>/duplicar"
+        onsubmit="return confirm('Duplicar este orçamento? Uma cópia será criada com status novo.')">
+    <button class="btn ghost sm" type="submit">Duplicar</button>
+  </form>
   <form method="post" action="/admin/orcamentos/<%= orcamento.id %>/contrato"
         onsubmit="return confirm('Transformar este orçamento em contrato?')">
     <button class="btn ghost sm" type="submit">Gerar contrato</button>
@@ -122,6 +156,11 @@ const stLabel = st.replace('_',' ');
         <option value="<%= p.nome %>">R$ <%= Number(p.valor_unitario).toLocaleString('pt-BR',{minimumFractionDigits:2}) %></option>
       <% }) %>
     </datalist>
+
+    <div class="field">
+      <label>Observações (aparece no PDF)</label>
+      <textarea name="observacoes" rows="3" placeholder="Informações adicionais que serão impressas na ordem de serviço"><%= orcamento.observacoes || '' %></textarea>
+    </div>
 
     <input type="hidden" name="itens_json" id="itensJson">
     <input type="hidden" name="valor_total" id="valorTotal">

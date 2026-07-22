@@ -91,6 +91,15 @@ function requireAuth(req, res, next) {
   return res.redirect('/admin/login');
 }
 
+// Disponibiliza a contagem de orçamentos "em aberto" para o menu lateral (badge de notificação).
+app.use('/admin', wrap(async (req, res, next) => {
+  if (req.session.user) {
+    try { res.locals.orcAbertos = (await repo.countQuotesOpen()).c; }
+    catch (e) { res.locals.orcAbertos = 0; }
+  }
+  next();
+}));
+
 // ================= ROTAS PÚBLICAS =================
 
 // --- Consulta de CNPJ com vários provedores em cascata (tolerante a falhas) ---
@@ -169,14 +178,18 @@ app.post('/orcamento', wrap(async (req, res) => {
   // Data prevista de início + prazo => data de fim (vencimento do futuro contrato).
   const dataInicio = (data_inicio || '').trim() || null;
   const dataFim = somaDias(dataInicio, prazoEmDias(prazo));
-  await repo.insertQuote({
+  const dadosCliente = {
     nome: nome.trim(), empresa: (empresa || '').trim(), email: email.trim(),
-    telefone: (telefone || '').trim(), servico, prazo: (prazo || '').trim(),
+    telefone: (telefone || '').trim(), cnpj: doc.slice(0, 14),
+  };
+  await repo.insertQuote({
+    ...dadosCliente, servico, prazo: (prazo || '').trim(),
     detalhes: (detalhes || '').trim(),
-    cnpj: doc.slice(0, 14),
     data_inicio: dataInicio,
     data_fim: dataFim
   });
+  // Alimenta o cadastro de clientes com o que foi preenchido no orçamento.
+  try { await repo.upsertCliente(dadosCliente); } catch (e) { /* não bloqueia o pedido */ }
   if (ajax) return res.json({ ok: true });
   res.redirect('/obrigado');
 }));
@@ -227,6 +240,44 @@ app.get('/admin/orcamentos', requireAuth, wrap(async (req, res) => {
   res.render('orcamentos', { quotes, status: status || '' });
 }));
 
+// Novo orçamento manual (formulário). Aceita ?cliente=ID para pré-preencher a partir de um cliente.
+app.get('/admin/orcamentos/novo', requireAuth, wrap(async (req, res) => {
+  let cliente = null;
+  if (req.query.cliente) cliente = await repo.getCliente(req.query.cliente);
+  res.render('orcamento_novo', { cliente });
+}));
+
+app.post('/admin/orcamentos/novo', requireAuth, wrap(async (req, res) => {
+  const { nome, empresa, email, telefone, cnpj, servico, prazo, detalhes, responsavel, data_inicio } = req.body;
+  if (!(nome || empresa) || !servico) {
+    flash(req, 'erro', 'Informe ao menos um contato/empresa e o serviço.');
+    return res.redirect('/admin/orcamentos/novo');
+  }
+  const doc = (cnpj || '').replace(/\D/g, '').slice(0, 14);
+  const dataInicio = (data_inicio || '').trim() || null;
+  const dataFim = somaDias(dataInicio, prazoEmDias(prazo));
+  const dadosCliente = {
+    nome: (nome || '').trim(), empresa: (empresa || '').trim(), email: (email || '').trim(),
+    telefone: (telefone || '').trim(), cnpj: doc,
+  };
+  const r = await repo.insertQuoteManual({
+    ...dadosCliente, servico: servico.trim(), prazo: (prazo || '').trim(),
+    detalhes: (detalhes || '').trim(), responsavel: (responsavel || '').trim() || null,
+    data_inicio: dataInicio, data_fim: dataFim,
+  });
+  try { await repo.upsertCliente(dadosCliente); } catch (e) { /* segue */ }
+  flash(req, 'ok', 'Orçamento criado. Agora monte os itens e valores.');
+  res.redirect('/admin/orcamentos/' + r.insertId);
+}));
+
+// Duplicar um orçamento existente (cabeçalho + itens) — cria uma cópia com status "novo".
+app.post('/admin/orcamentos/:id/duplicar', requireAuth, wrap(async (req, res) => {
+  const novoId = await repo.duplicateQuote(req.params.id);
+  if (!novoId) return res.status(404).send('Orçamento não encontrado');
+  flash(req, 'ok', 'Orçamento duplicado. Você está vendo a cópia.');
+  res.redirect('/admin/orcamentos/' + novoId);
+}));
+
 app.get('/admin/orcamentos/:id', requireAuth, wrap(async (req, res) => {
   const q = await repo.getQuote(req.params.id);
   if (!q) return res.status(404).send('Orçamento não encontrado');
@@ -239,8 +290,8 @@ app.get('/admin/orcamentos/:id', requireAuth, wrap(async (req, res) => {
 }));
 
 app.post('/admin/orcamentos/:id/salvar', requireAuth, wrap(async (req, res) => {
-  const { responsavel, valor_total, itens_json, data_inicio, data_fim } = req.body;
-  await repo.saveOrcamento(req.params.id, responsavel, valor_total, JSON.parse(itens_json || '[]'), data_inicio || null, data_fim || null);
+  const { responsavel, valor_total, itens_json, data_inicio, data_fim, observacoes } = req.body;
+  await repo.saveOrcamento(req.params.id, responsavel, valor_total, JSON.parse(itens_json || '[]'), data_inicio || null, data_fim || null, (observacoes || '').trim());
   flash(req, 'ok', 'Orçamento atualizado com sucesso!');
   res.redirect('/admin/orcamentos/' + req.params.id);
 }));
@@ -275,15 +326,37 @@ app.get('/admin/estoque', requireAuth, wrap(async (req, res) => {
 }));
 
 app.post('/admin/estoque/modelo', requireAuth, wrap(async (req, res) => {
-  const { modelo, descricao, total, preco } = req.body;
+  const { modelo, descricao, numero_serie, total, preco } = req.body;
   const qtd = parseInt(total, 10);
   if (!modelo || isNaN(qtd) || qtd < 0) {
     flash(req, 'erro', 'Informe o modelo e uma quantidade válida.');
     return res.redirect('/admin/estoque');
   }
   const valor = preco ? parseFloat(String(preco).replace(',', '.')) : 0;
-  await repo.insInv(modelo.trim(), (descricao || '').trim(), qtd, Number.isFinite(valor) ? valor : 0);
+  await repo.insInv(modelo.trim(), (descricao || '').trim(), qtd, Number.isFinite(valor) ? valor : 0, (numero_serie || '').trim());
   flash(req, 'ok', 'Modelo adicionado ao estoque.');
+  res.redirect('/admin/estoque');
+}));
+
+// Editar um modelo do estoque.
+app.post('/admin/estoque/modelo/:id/editar', requireAuth, wrap(async (req, res) => {
+  const inv = await repo.getInv(req.params.id);
+  if (!inv) { flash(req, 'erro', 'Modelo não encontrado.'); return res.redirect('/admin/estoque'); }
+  const { modelo, descricao, numero_serie, total, preco } = req.body;
+  const qtd = parseInt(total, 10);
+  if (!modelo || isNaN(qtd) || qtd < 0) {
+    flash(req, 'erro', 'Informe o modelo e uma quantidade válida.');
+    return res.redirect('/admin/estoque');
+  }
+  // Não deixa reduzir o total abaixo do que já está locado.
+  const jaLocados = Number((await repo.sumActiveForModel(inv.id)).s);
+  if (qtd < jaLocados) {
+    flash(req, 'erro', `Não é possível definir o total como ${qtd}: há ${jaLocados} unidade(s) locada(s).`);
+    return res.redirect('/admin/estoque');
+  }
+  const valor = preco ? parseFloat(String(preco).replace(',', '.')) : 0;
+  await repo.updInv(inv.id, modelo.trim(), (descricao || '').trim(), qtd, Number.isFinite(valor) ? valor : 0, (numero_serie || '').trim());
+  flash(req, 'ok', 'Modelo atualizado.');
   res.redirect('/admin/estoque');
 }));
 
@@ -334,7 +407,9 @@ app.get('/admin/protocolos', requireAuth, wrap(async (req, res) => {
   if (filtro === 'vencendo') lista = lista.filter(c => c.vencendo);
   else if (filtro === 'vencidos') lista = lista.filter(c => c.vencido);
   else if (filtro === 'ativos') lista = lista.filter(c => c.status === 'ativo');
-  else if (filtro === 'encerrados') lista = lista.filter(c => c.status !== 'ativo');
+  else if (filtro === 'enviado') lista = lista.filter(c => c.status === 'enviado');
+  else if (filtro === 'pago') lista = lista.filter(c => c.status === 'pago');
+  else if (filtro === 'encerrados') lista = lista.filter(c => c.status !== 'ativo' && c.status !== 'enviado' && c.status !== 'pago');
   res.render('protocolos', { contratos: lista, stats: await contractStats(), situacao: filtro });
 }));
 
@@ -382,12 +457,13 @@ app.get('/admin/protocolos/:id', requireAuth, wrap(async (req, res) => {
 app.post('/admin/protocolos/:id', requireAuth, wrap(async (req, res) => {
   const c = await repo.getContract(req.params.id);
   if (!c) return res.status(404).send('Contrato não encontrado');
-  const { empresa, contato, email, servico, valor, data_inicio, data_vencimento, status, obs } = req.body;
+  const { empresa, contato, email, servico, valor, data_inicio, data_vencimento, data_pagamento, status, obs } = req.body;
   await repo.updateContract({
     id: c.id, empresa: (empresa || c.empresa).trim(), contato: (contato || '').trim(),
     email: (email || '').trim(), servico: (servico || '').trim(),
     valor: valor ? parseFloat(String(valor).replace(',', '.')) : null,
     data_inicio: data_inicio || c.data_inicio, data_vencimento: data_vencimento || null,
+    data_pagamento: data_pagamento || null,
     status: status || c.status, obs: (obs || '').trim()
   });
   flash(req, 'ok', 'Contrato atualizado.');
@@ -398,6 +474,90 @@ app.post('/admin/protocolos/:id/excluir', requireAuth, wrap(async (req, res) => 
   await repo.delContract(req.params.id);
   flash(req, 'ok', 'Contrato excluído.');
   res.redirect('/admin/protocolos');
+}));
+
+// ---- APIs de autocomplete (sugestões ao digitar) ----
+app.get('/admin/api/clientes/suggest', requireAuth, wrap(async (req, res) => {
+  const q = (req.query.q || '').trim().toLowerCase();
+  if (q.length < 1) return res.json([]);
+  const clientes = await repo.listClientes();
+  const matches = clientes.filter(c => {
+    return (c.empresa || '').toLowerCase().includes(q)
+      || (c.nome || '').toLowerCase().includes(q)
+      || (c.cnpj || '').includes(q.replace(/\D/g, ''));
+  }).slice(0, 3).map(c => ({
+    id: c.id,
+    empresa: c.empresa || '',
+    nome: c.nome || '',
+    cnpj: c.cnpj || '',
+    email: c.email || '',
+    telefone: c.telefone || ''
+  }));
+  res.json(matches);
+}));
+
+app.get('/admin/api/contratos/suggest', requireAuth, wrap(async (req, res) => {
+  const q = (req.query.q || '').trim().toLowerCase();
+  if (q.length < 1) return res.json([]);
+  const contratos = await repo.listContracts();
+  const matches = contratos.filter(c =>
+    (c.empresa || '').toLowerCase().includes(q)
+    || (c.contato || '').toLowerCase().includes(q)
+  ).slice(0, 3).map(c => ({ id: c.id, empresa: c.empresa, contato: c.contato || '' }));
+  res.json(matches);
+}));
+
+app.get('/admin/api/estoque/suggest', requireAuth, wrap(async (req, res) => {
+  const q = (req.query.q || '').trim().toLowerCase();
+  const campo = req.query.campo || 'modelo';
+  if (q.length < 1) return res.json([]);
+  const t = await inventoryTotals();
+  const seen = new Set();
+  const matches = [];
+  t.models.forEach(m => {
+    let val = '';
+    if (campo === 'modelo') val = m.modelo || '';
+    else if (campo === 'descricao') val = m.descricao || '';
+    else if (campo === 'serie') val = m.numero_serie || '';
+    if (val.toLowerCase().includes(q) && !seen.has(val)) {
+      seen.add(val);
+      matches.push({ valor: val, modelo: m.modelo });
+    }
+  });
+  res.json(matches.slice(0, 3));
+}));
+
+// ---- Clientes ----
+app.get('/admin/clientes', requireAuth, wrap(async (req, res) => {
+  res.render('clientes', { clientes: await repo.listClientes() });
+}));
+
+app.get('/admin/clientes/:id', requireAuth, wrap(async (req, res) => {
+  const cliente = await repo.getCliente(req.params.id);
+  if (!cliente) return res.status(404).send('Cliente não encontrado');
+  const orcamentos = await repo.quotesByCliente(cliente);
+  res.render('cliente_detail', { cliente, orcamentos });
+}));
+
+app.post('/admin/clientes/:id', requireAuth, wrap(async (req, res) => {
+  const cliente = await repo.getCliente(req.params.id);
+  if (!cliente) return res.status(404).send('Cliente não encontrado');
+  const { empresa, nome, email, telefone, cnpj, endereco, obs } = req.body;
+  await repo.updateCliente({
+    id: cliente.id,
+    cnpj: (cnpj || '').replace(/\D/g, '').slice(0, 14),
+    empresa: (empresa || '').trim(), nome: (nome || '').trim(),
+    email: (email || '').trim(), telefone: (telefone || '').trim(),
+    endereco: (endereco || '').trim(), obs: (obs || '').trim(),
+  });
+  flash(req, 'ok', 'Cliente atualizado.');
+  res.redirect('/admin/clientes/' + cliente.id);
+}));
+
+app.post('/admin/clientes/:id/excluir', requireAuth, wrap(async (req, res) => {
+  await repo.delCliente(req.params.id);
+  flash(req, 'ok', 'Cliente removido do cadastro.');
+  res.redirect('/admin/clientes');
 }));
 
 app.use((err, req, res, next) => {

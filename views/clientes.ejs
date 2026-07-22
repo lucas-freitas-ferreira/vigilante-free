@@ -1,0 +1,81 @@
+<%- include('partials/header', { title: 'Clientes' }) %>
+<% function fmtCnpj(v){ const d=String(v||'').replace(/\D/g,''); if(d.length===14) return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5'); if(d.length===11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4'); return v||'—'; } %>
+
+<h1 class="page">Clientes</h1>
+<p class="sub">Cadastro alimentado automaticamente pelas informações preenchidas nos orçamentos. Abra um cliente para editar os dados ou ver o histórico de orçamentos.</p>
+
+<fieldset style="margin-bottom:18px;padding:14px 18px">
+  <legend>Filtrar</legend>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+    <div class="field" style="flex:1;min-width:180px"><label>Nome / Empresa</label><input id="fNome" placeholder="Digite para filtrar…" autocomplete="off"></div>
+    <div class="field" style="flex:1;min-width:160px"><label>CNPJ / CPF</label><input id="fCnpj" placeholder="Digite para filtrar…" autocomplete="off"></div>
+    <span id="fCount" style="font-size:12.5px;color:var(--ink-3);padding-bottom:10px"></span>
+  </div>
+</fieldset>
+
+<div class="panel">
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>Empresa / Contato</th><th>CNPJ / CPF</th><th>Contato</th><th>Orçamentos</th><th></th></tr></thead>
+    <tbody id="tblBody">
+      <% if (clientes.length === 0) { %>
+        <tr><td colspan="5" class="empty">Nenhum cliente ainda. Assim que um orçamento for recebido ou criado, o cliente aparece aqui automaticamente.</td></tr>
+      <% } %>
+      <% clientes.forEach(c => { %>
+        <tr class="js-row-click" data-href="/admin/clientes/<%= c.id %>" style="cursor:pointer"
+            data-nome="<%= (c.empresa || '').toLowerCase() %> <%= (c.nome || '').toLowerCase() %>" data-cnpj="<%= c.cnpj || '' %>">
+          <td><strong><%= c.empresa || c.nome || '—' %></strong><% if (c.empresa && c.nome) { %><br><span style="color:var(--ink-3);font-size:13px"><%= c.nome %></span><% } %></td>
+          <td style="color:var(--ink-2)"><%= c.cnpj ? fmtCnpj(c.cnpj) : '—' %></td>
+          <td style="font-size:13px;color:var(--ink-2)"><%= c.email || '—' %><% if (c.telefone) { %><br><%= c.telefone %><% } %></td>
+          <td class="num"><span class="pill"><%= c.orcamentos %></span></td>
+          <td class="row-actions" data-no-click>
+            <a class="linkish" href="/admin/clientes/<%= c.id %>">editar</a>
+            <form method="post" action="/admin/clientes/<%= c.id %>/excluir" style="display:inline"
+                  onsubmit="return confirm('Excluir o cliente <%= (c.empresa || c.nome || '').replace(/'/g,'') %>? Essa ação não pode ser desfeita.')">
+              <button class="linkish" type="submit" style="background:none;border:none;cursor:pointer;padding:0;font:inherit;color:var(--danger)">excluir</button>
+            </form>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<style>.js-row-click:hover td{background:rgba(0,0,0,.03)}</style>
+<script>
+(function(){
+  // Filtro instantâneo
+  var fNome = document.getElementById('fNome');
+  var fCnpj = document.getElementById('fCnpj');
+  var count = document.getElementById('fCount');
+  var rows = Array.from(document.querySelectorAll('#tblBody tr[data-nome]'));
+
+  if (rows.length) {
+    function filter(){
+      var qNome = (fNome.value || '').trim().toLowerCase();
+      var qCnpj = (fCnpj.value || '').replace(/\D/g, '');
+      var shown = 0;
+      rows.forEach(function(tr){
+        var matchN = !qNome || (tr.dataset.nome || '').indexOf(qNome) !== -1;
+        var matchC = !qCnpj || (tr.dataset.cnpj || '').indexOf(qCnpj) !== -1;
+        var ok = matchN && matchC;
+        tr.style.display = ok ? '' : 'none';
+        if (ok) shown++;
+      });
+      count.textContent = (qNome || qCnpj) ? shown + ' de ' + rows.length + ' clientes' : '';
+    }
+    fNome.addEventListener('input', filter);
+    fCnpj.addEventListener('input', filter);
+  }
+
+  // Row click
+  document.querySelectorAll('.js-row-click').forEach(function(tr){
+    tr.addEventListener('click', function(e){
+      if (e.target.closest('[data-no-click]') || e.target.tagName==='A' || e.target.tagName==='BUTTON') return;
+      window.location = tr.dataset.href;
+    });
+  });
+})();
+</script>
+<%- include('partials/footer') %>

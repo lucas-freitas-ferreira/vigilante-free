@@ -1,0 +1,121 @@
+<%- include('partials/header', { title: 'Novo orçamento' }) %>
+<% function v(x){ return (x==null?'':String(x)).replace(/"/g,'&quot;'); } %>
+
+<a class="back" href="/admin/orcamentos">← voltar para orçamentos</a>
+
+<h1 class="page" style="margin:8px 0 4px">Novo orçamento</h1>
+<p class="sub">
+  Crie um orçamento manualmente pelo painel.
+  <% if (cliente) { %>Pré-preenchido com os dados de <strong style="color:var(--ink)"><%= cliente.empresa || cliente.nome %></strong>.<% } %>
+  Depois de criar, você monta os itens e valores na tela do orçamento.
+</p>
+
+<fieldset>
+  <legend>Dados do cliente e do serviço</legend>
+  <form method="post" action="/admin/orcamentos/novo" class="stack">
+    <div class="grid3">
+      <div class="field">
+        <label>CNPJ / CPF</label>
+        <div style="display:flex;gap:8px">
+          <input name="cnpj" id="cnpj" value="<%= cliente ? v(cliente.cnpj) : '' %>" placeholder="somente números" inputmode="numeric" style="flex:1">
+          <button type="button" class="btn ghost sm" id="btnCnpj">Buscar</button>
+        </div>
+        <small id="cnpjMsg" style="color:var(--ink-3);font-size:12px"></small>
+      </div>
+      <div class="field"><label>Empresa</label><div class="ac-wrap"><input name="empresa" id="empresa" value="<%= cliente ? v(cliente.empresa) : '' %>" autocomplete="off"><div class="ac-list" id="acEmpresaList"></div></div></div>
+      <div class="field"><label>Contato</label><input name="nome" id="nome" value="<%= cliente ? v(cliente.nome) : '' %>" placeholder="pessoa de contato"></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>E-mail</label><input name="email" id="email" type="email" value="<%= cliente ? v(cliente.email) : '' %>"></div>
+      <div class="field"><label>Telefone</label><input name="telefone" id="telefone" value="<%= cliente ? v(cliente.telefone) : '' %>" placeholder="com DDD"></div>
+    </div>
+    <div class="grid3">
+      <div class="field"><label>Serviço</label><input name="servico" placeholder="ex: Locação de rádios" required></div>
+      <div class="field"><label>Prazo desejado</label><input name="prazo" placeholder="ex: 30 dias"></div>
+      <div class="field"><label>Data de início</label><input name="data_inicio" type="date"></div>
+    </div>
+    <div class="field"><label>Responsável pelo orçamento</label><input name="responsavel" placeholder="quem está preparando"></div>
+    <div class="field"><label>Detalhes / observações</label><textarea name="detalhes" rows="3" placeholder="informações adicionais do pedido"></textarea></div>
+    <div class="row-actions">
+      <button class="btn" type="submit">Criar orçamento</button>
+      <a class="btn ghost" href="/admin/orcamentos">Cancelar</a>
+    </div>
+  </form>
+</fieldset>
+
+<script>
+(function(){
+  // CNPJ lookup
+  var btn = document.getElementById('btnCnpj');
+  if(btn){
+    btn.addEventListener('click', function(){
+      var cnpj = (document.getElementById('cnpj').value || '').replace(/\D/g,'');
+      var msg = document.getElementById('cnpjMsg');
+      if(cnpj.length !== 14){ msg.textContent = 'Informe um CNPJ com 14 dígitos.'; return; }
+      msg.textContent = 'Consultando…';
+      fetch('/api/cnpj/' + cnpj).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+        .then(function(res){
+          if(!res.ok){ msg.textContent = res.j.erro || 'Não encontrado.'; return; }
+          var d = res.j;
+          if(d.empresa && !document.getElementById('empresa').value) document.getElementById('empresa').value = d.empresa;
+          if(d.email && !document.getElementById('email').value) document.getElementById('email').value = d.email;
+          if(d.telefone && !document.getElementById('telefone').value) document.getElementById('telefone').value = d.telefone;
+          msg.textContent = 'Dados preenchidos' + (d.situacao ? ' · situação: ' + d.situacao : '') + '.';
+        }).catch(function(){ msg.textContent = 'Falha na consulta. Preencha manualmente.'; });
+    });
+  }
+
+  // Autocomplete de empresa (busca clientes cadastrados)
+  function fmtDoc(v){var d=String(v||'').replace(/\D/g,'');if(d.length===14)return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');if(d.length===11)return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4');return v||'';}
+  function initials(s){return (s||'?').trim().split(/\s+/).slice(0,2).map(function(w){return w[0];}).join('').toUpperCase();}
+  var inp=document.getElementById('empresa'), list=document.getElementById('acEmpresaList');
+  if(inp && list){
+    var timer=null, idx=-1;
+    inp.addEventListener('input',function(){
+      clearTimeout(timer);
+      var q=inp.value.trim();
+      if(q.length<1){list.classList.remove('open');return;}
+      timer=setTimeout(function(){
+        fetch('/admin/api/clientes/suggest?q='+encodeURIComponent(q))
+          .then(function(r){return r.json();})
+          .then(function(data){
+            if(!data.length){list.classList.remove('open');return;}
+            idx=-1;
+            list.innerHTML=data.map(function(c,i){
+              var name=c.empresa||c.nome;
+              return '<div class="ac-item" data-idx="'+i+'">'
+                +'<span class="ac-icon">'+initials(name)+'</span>'
+                +'<span class="ac-text"><strong>'+name+'</strong>'
+                +(c.cnpj?'<small>'+fmtDoc(c.cnpj)+'</small>':'')
+                +'</span></div>';
+            }).join('');
+            list.classList.add('open');
+            list.querySelectorAll('.ac-item').forEach(function(el){
+              el.addEventListener('mousedown',function(e){
+                e.preventDefault();
+                var c=data[parseInt(el.dataset.idx)];
+                document.getElementById('empresa').value=c.empresa||'';
+                if(c.nome && !document.getElementById('nome').value) document.getElementById('nome').value=c.nome;
+                if(c.cnpj && !document.getElementById('cnpj').value) document.getElementById('cnpj').value=c.cnpj;
+                if(c.email && !document.getElementById('email').value) document.getElementById('email').value=c.email;
+                if(c.telefone && !document.getElementById('telefone').value) document.getElementById('telefone').value=c.telefone;
+                list.classList.remove('open');
+              });
+            });
+          });
+      },200);
+    });
+    inp.addEventListener('keydown',function(e){
+      var items=list.querySelectorAll('.ac-item');if(!items.length) return;
+      if(e.key==='ArrowDown'){e.preventDefault();idx=Math.min(idx+1,items.length-1);}
+      else if(e.key==='ArrowUp'){e.preventDefault();idx=Math.max(idx-1,0);}
+      else if(e.key==='Enter'&&idx>=0){e.preventDefault();items[idx].dispatchEvent(new Event('mousedown'));return;}
+      else if(e.key==='Escape'){list.classList.remove('open');return;}
+      items.forEach(function(el,i){el.classList.toggle('active',i===idx);});
+    });
+    inp.addEventListener('blur',function(){setTimeout(function(){list.classList.remove('open');},150);});
+  }
+})();
+</script>
+
+<%- include('partials/footer') %>

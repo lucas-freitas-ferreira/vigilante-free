@@ -1,13 +1,15 @@
 <%- include('partials/header', { title: 'Contrato #' + c.id }) %>
 <% function money(v){ return (v||v===0) ? Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}) : '—'; } %>
 
-<a class="back" href="/admin/protocolos">← voltar para protocolos</a>
+<a class="back" href="/admin/protocolos">← voltar para faturamento</a>
 
 <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin:8px 0 4px;flex-wrap:wrap">
   <h1 class="page" style="margin:0">Contrato #<%= String(c.id).padStart(4,'0') %> — <%= c.empresa %></h1>
   <% if (c.status==='ativo' && c.vencido) { %><span class="badge perdido">vencido há <%= Math.abs(c.diasParaVencer) %> dias</span>
   <% } else if (c.status==='ativo' && c.vencendo) { %><span class="badge em_analise">vence em <%= c.diasParaVencer %> dias</span>
   <% } else if (c.status==='ativo') { %><span class="badge fechado">ativo</span>
+  <% } else if (c.status==='enviado') { %><span class="badge enviado">enviado</span>
+  <% } else if (c.status==='pago') { %><span class="badge pago">pago</span>
   <% } else { %><span class="badge devolvida"><%= c.status %></span><% } %>
 </div>
 <p class="sub">
@@ -26,18 +28,21 @@
       <div class="field"><label>E-mail</label><input name="email" type="email" value="<%= c.email || '' %>"></div>
       <div class="field"><label>Serviço</label><input name="servico" value="<%= c.servico || '' %>"></div>
     </div>
-    <div class="grid3">
+    <div class="grid2">
       <div class="field"><label>Valor (R$)</label><input name="valor" inputmode="decimal" value="<%= c.valor != null ? c.valor : '' %>"></div>
       <div class="field"><label>Início da contratação</label><input name="data_inicio" type="date" value="<%= c.data_inicio || '' %>" required></div>
-      <div class="field"><label>Data de vencimento</label><input name="data_vencimento" type="date" value="<%= c.data_vencimento || '' %>"></div>
     </div>
-    <div class="field">
-      <label>Status</label>
-      <select name="status">
-        <% ['ativo','encerrado','cancelado'].forEach(s => { %>
-          <option value="<%= s %>" <%= c.status===s?'selected':'' %>><%= s %></option>
-        <% }) %>
-      </select>
+    <div class="grid3">
+      <div class="field"><label>Data de vencimento</label><input name="data_vencimento" type="date" value="<%= c.data_vencimento || '' %>"></div>
+      <div class="field"><label>Data de pagamento</label><input name="data_pagamento" type="date" value="<%= c.data_pagamento || '' %>"></div>
+      <div class="field">
+        <label>Status</label>
+        <select name="status">
+          <% ['ativo','enviado','pago','encerrado','cancelado'].forEach(s => { %>
+            <option value="<%= s %>" <%= c.status===s?'selected':'' %>><%= s %></option>
+          <% }) %>
+        </select>
+      </div>
     </div>
     <div class="field"><label>Observações</label><textarea name="obs" rows="3"><%= c.obs || '' %></textarea></div>
     <div class="row-actions">

@@ -10,23 +10,44 @@
   <div class="card"><div class="k">Locados</div><div class="v info"><%= totais.totalLocados %></div></div>
 </div>
 
+<!-- Filtro de modelos -->
+<fieldset style="margin-bottom:18px;padding:14px 18px">
+  <legend>Filtrar aparelhos</legend>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+    <div class="field" style="flex:1;min-width:140px"><label>Modelo</label><input id="fModelo" placeholder="Digite para filtrar…" autocomplete="off"></div>
+    <div class="field" style="flex:1;min-width:140px"><label>Descrição</label><input id="fDesc" placeholder="Digite para filtrar…" autocomplete="off"></div>
+    <div class="field" style="flex:1;min-width:140px"><label>Nº de série</label><input id="fSerie" placeholder="Digite para filtrar…" autocomplete="off"></div>
+    <span id="fCount" style="font-size:12.5px;color:var(--ink-3);padding-bottom:10px"></span>
+  </div>
+</fieldset>
+
 <!-- Modelos -->
 <div class="panel">
   <h2>Modelos de aparelho</h2>
   <div class="table-scroll">
   <table>
-    <thead><tr><th>Modelo</th><th>Descrição</th><th>Preço unit.</th><th>Total</th><th>Locados</th><th>Em estoque</th><th></th></tr></thead>
-    <tbody>
-      <% if (modelos.length === 0) { %><tr><td colspan="7" class="empty">Nenhum modelo cadastrado. Cadastre o primeiro aparelho no formulário abaixo.</td></tr><% } %>
+    <thead><tr><th>Modelo</th><th>Descrição</th><th>Nº de série</th><th>Preço unit.</th><th>Total</th><th>Locados</th><th>Em estoque</th><th></th></tr></thead>
+    <tbody id="tblModelos">
+      <% if (modelos.length === 0) { %><tr><td colspan="8" class="empty">Nenhum modelo cadastrado. Cadastre o primeiro aparelho no formulário abaixo.</td></tr><% } %>
       <% modelos.forEach(m => { %>
-        <tr>
+        <tr data-modelo="<%= (m.modelo||'').toLowerCase() %>"
+            data-desc="<%= (m.descricao||'').toLowerCase() %>"
+            data-serie="<%= (m.numero_serie||'').toLowerCase() %>">
           <td><strong><%= m.modelo %></strong></td>
           <td style="color:var(--ink-2)"><%= m.descricao || '—' %></td>
+          <td style="color:var(--ink-2);white-space:pre-line;font-family:'IBM Plex Mono',monospace;font-size:12.5px"><%= m.numero_serie || '—' %></td>
           <td class="num" style="color:<%= Number(m.preco)>0?'var(--signal)':'var(--ink-3)' %>;font-weight:600"><%= money(m.preco) %></td>
           <td class="num"><span class="pill"><%= m.total %></span></td>
           <td class="num"><span class="pill"><%= m.locados %></span></td>
           <td class="num"><span class="pill" style="border-color:<%= m.em_estoque>0?'var(--line)':'rgba(224,109,109,.5)' %>"><%= m.em_estoque %></span></td>
-          <td>
+          <td class="row-actions">
+            <button type="button" class="btn ghost sm js-edit-modelo"
+              data-id="<%= m.id %>"
+              data-modelo="<%= m.modelo.replace(/"/g,'&quot;') %>"
+              data-descricao="<%= (m.descricao||'').replace(/"/g,'&quot;') %>"
+              data-serie="<%= (m.numero_serie||'').replace(/"/g,'&quot;') %>"
+              data-total="<%= m.total %>"
+              data-preco="<%= Number(m.preco) %>">editar</button>
             <form method="post" action="/admin/estoque/modelo/<%= m.id %>/excluir"
                   onsubmit="return confirm('Remover o modelo <%= m.modelo %> e todas as suas locações?')">
               <button class="btn danger sm" type="submit">remover</button>
@@ -100,6 +121,7 @@
     <form method="post" action="/admin/estoque/modelo" class="stack">
       <div class="field"><label>Modelo</label><input name="modelo" placeholder="ex: Motorola DEP450" required></div>
       <div class="field"><label>Descrição</label><input name="descricao" placeholder="ex: Rádio HT digital UHF"></div>
+      <div class="field"><label>Nº de série</label><textarea name="numero_serie" rows="2" placeholder="ex: 018NHQ02T2, 018NJW040H (um por linha ou separados por vírgula)"></textarea></div>
       <div class="grid2">
         <div class="field"><label>Quantidade total possuída</label><input name="total" type="number" min="0" required></div>
         <div class="field"><label>Preço unit. (R$)</label><input name="preco" inputmode="decimal" placeholder="ex: 150.00"></div>
@@ -140,5 +162,83 @@
   </div>
 </div>
 <% } %>
+
+<script>
+(function(){
+  var fMod  = document.getElementById('fModelo');
+  var fDesc = document.getElementById('fDesc');
+  var fSer  = document.getElementById('fSerie');
+  var count = document.getElementById('fCount');
+  var rows  = Array.from(document.querySelectorAll('#tblModelos tr[data-modelo]'));
+  if (!rows.length) return;
+
+  function filter(){
+    var qM = (fMod.value  || '').trim().toLowerCase();
+    var qD = (fDesc.value || '').trim().toLowerCase();
+    var qS = (fSer.value  || '').trim().toLowerCase();
+    var shown = 0;
+    rows.forEach(function(tr){
+      var ok = true;
+      if (qM && (tr.dataset.modelo || '').indexOf(qM) === -1) ok = false;
+      if (qD && (tr.dataset.desc   || '').indexOf(qD) === -1) ok = false;
+      if (qS && (tr.dataset.serie  || '').indexOf(qS) === -1) ok = false;
+      tr.style.display = ok ? '' : 'none';
+      if (ok) shown++;
+    });
+    var active = qM || qD || qS;
+    count.textContent = active ? shown + ' de ' + rows.length + ' modelos' : '';
+  }
+  fMod.addEventListener('input', filter);
+  fDesc.addEventListener('input', filter);
+  fSer.addEventListener('input', filter);
+})();
+</script>
+
+<!-- Modal: editar modelo do estoque -->
+<dialog class="modal" id="dlgEditModelo">
+  <form method="post" id="formEditModelo" class="stack" style="margin:0">
+    <div class="modal-head">
+      <h3>Editar modelo</h3>
+      <button type="button" class="x" data-close aria-label="Fechar">&times;</button>
+    </div>
+    <div class="modal-body stack">
+      <div class="field"><label>Modelo</label><input name="modelo" id="em_modelo" required></div>
+      <div class="field"><label>Descrição</label><input name="descricao" id="em_descricao"></div>
+      <div class="field"><label>Nº de série</label><textarea name="numero_serie" id="em_serie" rows="2" placeholder="um por linha ou separados por vírgula"></textarea></div>
+      <div class="grid2">
+        <div class="field"><label>Quantidade total</label><input name="total" id="em_total" type="number" min="0" required></div>
+        <div class="field"><label>Preço unit. (R$)</label><input name="preco" id="em_preco" inputmode="decimal"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn ghost sm" data-close>Cancelar</button>
+      <button type="submit" class="btn sm">Salvar alterações</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(function(){
+  var dlg = document.getElementById('dlgEditModelo');
+  var form = document.getElementById('formEditModelo');
+  if(!dlg || !form) return;
+  function openModal(d){
+    form.action = '/admin/estoque/modelo/' + d.id + '/editar';
+    document.getElementById('em_modelo').value = d.modelo || '';
+    document.getElementById('em_descricao').value = d.descricao || '';
+    document.getElementById('em_serie').value = d.serie || '';
+    document.getElementById('em_total').value = d.total || 0;
+    document.getElementById('em_preco').value = d.preco || '';
+    if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open','');
+  }
+  document.querySelectorAll('.js-edit-modelo').forEach(function(btn){
+    btn.addEventListener('click', function(){ openModal(btn.dataset); });
+  });
+  dlg.querySelectorAll('[data-close]').forEach(function(b){
+    b.addEventListener('click', function(){ dlg.close(); });
+  });
+  dlg.addEventListener('click', function(e){ if(e.target === dlg) dlg.close(); });
+})();
+</script>
 
 <%- include('partials/footer') %>

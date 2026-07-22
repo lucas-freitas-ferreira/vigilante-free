@@ -1,6 +1,9 @@
 <%- include('partials/header', { title: 'Orçamentos' }) %>
 
-<h1 class="page">Orçamentos</h1>
+<div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap">
+  <h1 class="page" style="margin:0">Orçamentos</h1>
+  <a class="btn sm" href="/admin/orcamentos/novo">+ Novo orçamento</a>
+</div>
 <p class="sub">Solicitações recebidas pelo site. Abra um pedido para ver detalhes, mudar o status ou gerar o PDF.</p>
 
 <div class="row-actions" style="margin-bottom:18px">
@@ -19,16 +22,18 @@
         <tr><td colspan="7" class="empty">Nenhum orçamento neste filtro. Ajuste os filtros acima ou aguarde novas solicitações.</td></tr>
       <% } %>
       <% quotes.forEach(q => { %>
-        <tr>
+        <tr class="js-row-click" data-href="/admin/orcamentos/<%= q.id %>" style="cursor:pointer">
           <td class="num"><%= String(q.id).padStart(4,'0') %></td>
           <td><strong><%= q.empresa || '—' %></strong><br><span style="color:var(--ink-3);font-size:13px"><%= q.nome %></span></td>
           <td><%= q.servico %></td>
           <td style="font-size:13px;color:var(--ink-2)"><%= q.email %><% if (q.telefone) { %><br><%= q.telefone %><% } %></td>
           <td><span class="badge <%= q.status %>"><%= q.status.replace('_',' ') %></span></td>
           <td style="color:var(--ink-3);font-size:13px"><%= q.created_at %></td>
-          <td class="row-actions">
+          <td class="row-actions" data-no-click>
             <a class="linkish" href="/admin/orcamentos/<%= q.id %>">abrir</a>
             <a class="linkish" href="/admin/orcamentos/<%= q.id %>/pdf" target="_blank">PDF</a>
+            <a class="linkish" href="#" onclick="event.preventDefault();if(confirm('Duplicar o orçamento #<%= String(q.id).padStart(4,'0') %>?')){document.getElementById('dup-<%= q.id %>').submit()}">duplicar</a>
+            <form id="dup-<%= q.id %>" method="post" action="/admin/orcamentos/<%= q.id %>/duplicar" style="display:none"></form>
           </td>
         </tr>
       <% }) %>
@@ -37,4 +42,13 @@
   </div>
 </div>
 
+<style>.js-row-click:hover td{background:rgba(0,0,0,.03)}</style>
+<script>
+document.querySelectorAll('.js-row-click').forEach(function(tr){
+  tr.addEventListener('click',function(e){
+    if(e.target.closest('[data-no-click]')||e.target.tagName==='A'||e.target.tagName==='BUTTON') return;
+    window.location = tr.dataset.href;
+  });
+});
+</script>
 <%- include('partials/footer') %>
